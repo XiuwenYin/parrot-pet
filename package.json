@@ -1,6 +1,6 @@
 {
   "name": "parrot-pet",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "鹦鹉桌宠：牡丹、虎皮、玄凤、和尚，插画风卡通形象 / 真实形象可切换，每种鸟有自己的习性",
   "main": "main.js",
   "scripts": {
