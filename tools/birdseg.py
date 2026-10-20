@@ -1,29 +1,74 @@
 """把照片/视频帧里的鸟精确抠出来。
 
 两步走：
-  1. 定位：tools/.bin/birdcut（调 macOS 自带的图像分类）在画面里滑窗找"最像鸟"的区域；
+  1. 定位：在画面里滑窗找"最像鸟"的区域。用哪个分类器：
+       Mac（macOS 14+）：tools/.bin/birdcut，调系统自带的图像分类；
+       Windows / 老 Mac：MobileNetV3（ImageNet-21k，认得各种鹦鹉，也认得人、笼子、沙发），onnxruntime 跑；
   2. 精抠：MobileSAM（Segment Anything 的轻量版）按这个框把鸟分割出来。
      框给了"抠哪个东西"的提示，所以站在人肩膀上、被手托着的鸟也能和人分开。
      抠出来的鸟如果碰到框边，说明框小了，就往那边扩框再抠。
 
-模型放在 ~/Library/Application Support/parrot-pet/models/（第一次用时由 setup 下载）。
+模型放在桌宠的数据目录 models/ 下（第一次用时由 setup 下载）：
+  Mac ~/Library/Application Support/parrot-pet，Windows %APPDATA%/parrot-pet。
 """
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 from scipy import ndimage
 
+try:  # iPhone 的 HEIC 照片（Mac 上 PIL 自己读不了，Windows 更读不了）
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
+
 HERE = Path(__file__).resolve().parent
-SUPPORT = Path.home() / 'Library' / 'Application Support' / 'parrot-pet'
+
+
+def _support_dir():
+    if os.environ.get('PARROT_SUPPORT'):
+        return Path(os.environ['PARROT_SUPPORT'])
+    if sys.platform == 'darwin':
+        return Path.home() / 'Library' / 'Application Support' / 'parrot-pet'
+    if os.name == 'nt':
+        return Path(os.environ.get('APPDATA', Path.home())) / 'parrot-pet'
+    return Path.home() / '.config' / 'parrot-pet'
+
+
+SUPPORT = _support_dir()
 MODELS = SUPPORT / 'models'
 BIRDCUT = HERE / '.bin' / 'birdcut'
+CLASSIFIER = MODELS / 'bird_classifier.onnx'          # MobileNetV3 ImageNet-21k（fp16）
+CLASSIFIER_LABELS = MODELS / 'bird_classifier.json'   # 标签表（模型自带的 config.json）
 SAM_SIZE = 1024
 # 分类器认出这些东西说明抠到的不只是鸟
 DISTRACTORS = ('cage', 'people', 'person', 'adult', 'child', 'hand', 'furniture', 'sofa', 'structure', 'interior_room')
+
+
+def use_vision():
+    """Mac 上有 birdcut 就用系统的识别（和以前一样）；PARROT_LOCATOR=onnx 可以强制用跨平台模型。"""
+    if os.environ.get('PARROT_LOCATOR') == 'onnx':
+        return False
+    if sys.platform != 'darwin' or not BIRDCUT.exists():
+        return False
+    import platform
+    try:
+        return int(platform.mac_ver()[0].split('.')[0]) >= 14   # 系统"抠主体"要 macOS 14+
+    except ValueError:
+        return True
+
+
+def make_locator():
+    return Locator() if use_vision() else OnnxLocator()
+
+
+def has_locator():
+    return use_vision() or CLASSIFIER.exists()
 
 
 class Locator:
@@ -58,6 +103,94 @@ class Locator:
             self.p.wait(timeout=3)
         except Exception:
             self.p.kill()
+
+
+# ImageNet-21k 标签里鸟的编号段（鸟类、雉鸡到天鹅、涉禽到海鸟）
+BIRD_RANGES = ((273, 585), (829, 1022), (1163, 1337))
+# 出现这些说明框里不只是鸟（对应 Vision 那边的 DISTRACTORS）
+ONNX_DISTRACTORS = {'person', 'people', 'hand', 'birdcage', 'cage', 'sofa', 'furniture', 'man', 'woman', 'child', 'room'}
+
+
+class OnnxLocator:
+    """跨平台的找鸟器：接口和 Locator 一样。"""
+
+    def __init__(self):
+        import onnxruntime as ort
+        opts = ort.SessionOptions()
+        opts.log_severity_level = 3
+        self.sess = ort.InferenceSession(str(CLASSIFIER), opts, providers=['CPUExecutionProvider'])
+        self.inp = self.sess.get_inputs()[0]
+        self.half = 'float16' in self.inp.type
+        id2 = json.load(open(CLASSIFIER_LABELS, encoding='utf-8'))['id2label']
+        self.labels = [id2[str(i)] for i in range(len(id2))]
+        self.bird = np.zeros(len(self.labels), bool)
+        for a, b in BIRD_RANGES:
+            self.bird[a:b + 1] = True
+        self.distract = np.array([l.lower() in ONNX_DISTRACTORS for l in self.labels])
+
+    @staticmethod
+    def _prep(im):
+        """补成正方形（灰边）再缩到 224，不裁掉鸟的任何部分。"""
+        w, h = im.size
+        s = max(w, h)
+        sq = Image.new('RGB', (s, s), (128, 128, 128))
+        sq.paste(im, ((s - w) // 2, (s - h) // 2))
+        return np.asarray(sq.resize((224, 224), Image.BICUBIC), np.float32).transpose(2, 0, 1) / 255
+
+    def _probs(self, crops):
+        out = []
+        for i in range(0, len(crops), 16):
+            x = np.stack([self._prep(c) for c in crops[i:i + 16]])
+            z = self.sess.run(None, {self.inp.name: x.astype(np.float16 if self.half else np.float32)})[0]
+            z = z.astype(np.float32)
+            p = np.exp(z - z.max(axis=1, keepdims=True))
+            out.extend(p / p.sum(axis=1, keepdims=True))
+        return out
+
+    def _bird_score(self, p):
+        sc = float(p[self.bird].sum())
+        dis = float(p[self.distract].sum())
+        if dis > 0.05:
+            sc *= max(0.15, 1 - 1.5 * dis)
+        bi = np.where(self.bird)[0]
+        label = self.labels[int(bi[np.argmax(p[bi])])]
+        return sc, label
+
+    def locate(self, path):
+        """多尺度滑窗（和 birdcut 一样），返回最像鸟的窗口 [x,y,w,h] 和分数。"""
+        im = Image.open(path).convert('RGB')
+        W, H = im.size
+        boxes = [(0, 0, W, H)]
+        m = min(W, H)
+        weights = [1.0]
+        for frac in (0.75, 0.5, 0.33):
+            side = m * frac
+            stride = side * 0.5
+            y = 0.0
+            while y + side <= H + 1:
+                x = 0.0
+                while x + side <= W + 1:
+                    boxes.append((x, y, side, side))
+                    weights.append(0.85 + 0.15 * frac)   # 小窗口略降权，免得只框到鸟头
+                    x += stride
+                y += stride
+        crops = [im.crop((int(x), int(y), int(x + w), int(y + h))) for x, y, w, h in boxes]
+        best, best_sc = boxes[0], -1.0
+        for b, wgt, p in zip(boxes, weights, self._probs(crops)):
+            sc = self._bird_score(p)[0] * wgt
+            if sc > best_sc:
+                best, best_sc = b, sc
+        return [int(v) for v in best], best_sc
+
+    def score(self, path, box=None):
+        im = Image.open(path).convert('RGB')
+        if box is not None:
+            x, y, w, h = box
+            im = im.crop((int(x), int(y), int(x + w), int(y + h)))
+        return self._bird_score(self._probs([im])[0])
+
+    def close(self):
+        pass
 
 
 class Sam:

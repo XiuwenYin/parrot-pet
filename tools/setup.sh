@@ -6,7 +6,7 @@
 # 以 ">> " 开头的行会显示在桌宠气泡里。
 set -e
 HERE=${0:A:h}
-SUPPORT="$HOME/Library/Application Support/parrot-pet"
+SUPPORT="${PARROT_SUPPORT:-$HOME/Library/Application Support/parrot-pet}"
 mkdir -p "$SUPPORT/models" "$HERE/.bin"
 
 echo ">> 编译小工具…"
@@ -22,7 +22,7 @@ if [[ ! -x "$SUPPORT/venv/bin/python" ]]; then
   python3 -m venv "$SUPPORT/venv"
 fi
 PIP_INDEX=${PIP_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}
-"$SUPPORT/venv/bin/pip" install -q -i "$PIP_INDEX" onnxruntime numpy pillow scipy
+"$SUPPORT/venv/bin/pip" install -q -i "$PIP_INDEX" onnxruntime numpy pillow scipy av pillow-heif
 
 echo ">> 下载抠图模型（约 60MB）…"
 for f in mobile_sam_image_encoder.onnx sam_mask_decoder_single.onnx sam_mask_decoder_multi.onnx; do
@@ -32,4 +32,17 @@ for f in mobile_sam_image_encoder.onnx sam_mask_decoder_single.onnx sam_mask_dec
     mv "$SUPPORT/models/$f.part" "$SUPPORT/models/$f"
   fi
 done
+# macOS 14 以下没有系统"抠主体"，找鸟改用跨平台的分类模型（MobileNetV3 ImageNet-21k，必须用 fp16 版）
+if (( ${$(sw_vers -productVersion)%%.*} < 14 )); then
+  echo ">> 下载找鸟模型（约 40MB）…"
+  REPO=onnx-community/mobilenetv3_large_100.miil_in21k/resolve/main
+  for pair in "onnx/model_fp16.onnx bird_classifier.onnx" "config.json bird_classifier.json"; do
+    src=${pair%% *}; dst=${pair##* }
+    if [[ ! -s "$SUPPORT/models/$dst" ]]; then
+      curl -fsSL --retry 3 -o "$SUPPORT/models/$dst.part" "https://huggingface.co/$REPO/$src" \
+        || curl -fsSL --retry 3 -o "$SUPPORT/models/$dst.part" "https://hf-mirror.com/$REPO/$src"
+      mv "$SUPPORT/models/$dst.part" "$SUPPORT/models/$dst"
+    fi
+  done
+fi
 echo ">> 准备好了"

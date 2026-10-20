@@ -34,6 +34,7 @@
       "assets/trayTemplate*.png",
       "tools/*.py",
       "tools/*.sh",
+      "tools/*.ps1",
       "tools/*.swift",
       "tools/.bin/**/*",
       "!src/poses.html"

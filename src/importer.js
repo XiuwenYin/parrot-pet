@@ -5,7 +5,6 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
 
 const MEDIA_EXT = /\.(mp4|mov|m4v|avi|mkv|webm|jpe?g|png|heic|webp)$/i;
 
@@ -27,13 +26,12 @@ function actionFromName(name, actionIds) {
   for (const [word, id] of NAME_ACTIONS) if (base.includes(word)) return id;
   return null;
 }
-const SUPPORT = path.join(os.homedir(), 'Library', 'Application Support', 'parrot-pet');  // 和 main.js 的 userData 一致
-const PYTHON = path.join(SUPPORT, 'venv', 'bin', 'python');
-const MODEL = path.join(SUPPORT, 'models', 'mobile_sam_image_encoder.onnx');
+const { pyEnv } = require('./pyenv');
 
-function createImporter({ root, realDir, getSpecies, speciesIds, actionIds = [], notify }) {
+// supportDir：桌宠的数据目录（main.js 的 userData），Python 环境和模型都在这里
+function createImporter({ root, realDir, supportDir, getSpecies, speciesIds, actionIds = [], notify }) {
   const recordPath = path.join(realDir, '.imported.json');
-  const birdcut = path.join(root, 'tools', '.bin', 'birdcut');
+  const py = pyEnv(supportDir, root);
   let record = {};
   try { record = JSON.parse(fs.readFileSync(recordPath, 'utf8')); } catch (_) {}
   const queue = [];
@@ -45,7 +43,7 @@ function createImporter({ root, realDir, getSpecies, speciesIds, actionIds = [],
   const saveRecord = () => {
     try { fs.writeFileSync(recordPath, JSON.stringify(record, null, 2)); } catch (_) {}
   };
-  const ready = () => fs.existsSync(PYTHON) && fs.existsSync(MODEL) && fs.existsSync(birdcut);
+  const ready = py.ready;
   const keyOf = (file, st) => `${path.relative(realDir, file)}|${st.size}|${Math.round(st.mtimeMs)}`;
 
   // 找出还没处理过的媒体文件：根目录 + 各鸟种目录的第一层
@@ -101,7 +99,7 @@ function createImporter({ root, realDir, getSpecies, speciesIds, actionIds = [],
     const action = actionFromName(name, actionIds);
     const args = [path.join(root, 'tools', 'import_media.py'), job.file, '--species', species, '--out', realDir];
     if (action) args.push('--action', action);
-    const p = spawn(PYTHON, args);
+    const p = spawn(py.python, args, { env: py.env, windowsHide: true });
     let buf = '';
     let result = null;
     p.stdout.on('data', (d) => {
@@ -137,9 +135,10 @@ function createImporter({ root, realDir, getSpecies, speciesIds, actionIds = [],
     if (setupRunning) return;
     setupRunning = true;
     notify('setup-progress', { stage: '开始准备…' });
-    const p = spawn('/bin/zsh', [path.join(root, 'tools', 'setup.sh')]);
+    const [cmd, cmdArgs] = py.setupCmd;
+    const p = spawn(cmd, cmdArgs, { env: py.env, windowsHide: true });
     const onLine = (d) => {
-      for (const line of String(d).split('\n')) if (line.startsWith('>> ')) notify('setup-progress', { stage: line.slice(3) });
+      for (const line of String(d).split(/\r?\n/)) if (line.startsWith('>> ')) notify('setup-progress', { stage: line.slice(3) });
     };
     p.stdout.on('data', onLine);
     p.stderr.on('data', () => {});
@@ -169,7 +168,7 @@ function createImporter({ root, realDir, getSpecies, speciesIds, actionIds = [],
     setTimeout(scan, 3000);
   }
 
-  return { start, scan, setup, reprocessAll, ready, busy: () => busy || queue.length > 0 };
+  return { start, scan, setup, reprocessAll, ready, setupSize: py.setupSize, busy: () => busy || queue.length > 0 };
 }
 
 module.exports = { createImporter, actionFromName };

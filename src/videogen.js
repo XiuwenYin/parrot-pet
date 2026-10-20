@@ -9,6 +9,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { AI_NEGATIVE, aiPrompt } = require('./aiprompts');
+const { pyEnv } = require('./pyenv');
 
 const CLIP_SECONDS = 5;
 const POLL_MS = 15000;
@@ -74,7 +75,7 @@ const PROVIDERS = {
 function createVideoGen({ userDataDir, realDir, toolsRoot, notify }) {
   const cfgPath = path.join(userDataDir, 'videogen.json');
   const jobsPath = path.join(userDataDir, 'videogen-jobs.json');
-  const python = path.join(os.homedir(), 'Library', 'Application Support', 'parrot-pet', 'venv', 'bin', 'python');
+  const py = pyEnv(userDataDir, toolsRoot);
   let jobs = [];
   let timer = null;
   try { jobs = JSON.parse(fs.readFileSync(jobsPath, 'utf8')); } catch (_) {}
@@ -138,8 +139,8 @@ function createVideoGen({ userDataDir, realDir, toolsRoot, notify }) {
         if (Math.max(width, height) > 1600) img = img.resize(width > height ? { width: 1600 } : { height: 1600 });
         resolve({ image: 'data:image/jpeg;base64,' + img.toJPEG(90).toString('base64'), cut: false });
       };
-      if (process.platform !== 'darwin' || !fs.existsSync(python)) return fallback();
-      const p = spawn(python, [script, photo, out]);
+      if (!py.ready()) return fallback();
+      const p = spawn(py.python, [script, photo, out], { env: py.env, windowsHide: true });
       let buf = '';
       p.stdout.on('data', (d) => { buf += d; });
       p.on('close', () => {

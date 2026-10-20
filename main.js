@@ -175,11 +175,9 @@ function buildMenuTemplate() {
       label: '真实素材',
       submenu: [
         { label: '打开素材文件夹（把视频、照片丢进来）', click: () => { fs.mkdirSync(REAL_DIR, { recursive: true }); require('electron').shell.openPath(REAL_DIR); } },
-        !IS_MAC
-          ? { label: '自动抠图目前只支持 Mac（可以手动放抠好的 PNG）', enabled: false }
-          : importer && !importer.ready()
-            ? { label: '下载自动抠图工具（约 60MB）', click: () => importer.setup() }
-            : { label: '重新处理全部素材', click: () => importer && importer.reprocessAll() },
+        importer && !importer.ready()
+          ? { label: `下载自动抠图工具（${importer.setupSize}）`, click: () => importer.setup() }
+          : { label: '重新处理全部素材', click: () => importer && importer.reprocessAll() },
       ],
     },
     { type: 'separator' },
@@ -342,12 +340,13 @@ app.whenReady().then(() => {
   importer = createImporter({
     root: TOOLS_ROOT,
     realDir: REAL_DIR,
+    supportDir: app.getPath('userData'),
     getSpecies: () => settings.species,
     speciesIds: Object.keys(SPECIES),
     actionIds: ACTIONS.map(a => a.id),
     notify: (cmd, arg) => { send(cmd, arg); if (cmd === 'setup-done') rebuildTray(); },
   });
-  if (IS_MAC) win.webContents.once('did-finish-load', () => importer.start());
+  win.webContents.once('did-finish-load', () => importer.start());
   createTray();
   // 换显示器、改分辨率时让鸟重新找地面
   screen.on('display-metrics-changed', () => send('come-back'));

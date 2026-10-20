@@ -15,6 +15,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')   # Windows 控制台默认 GBK，进度 JSON 里有中文
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import birdseg as bs  # noqa: E402
 
@@ -34,7 +36,7 @@ def main():
     tmp = tempfile.mkdtemp(prefix='parrot_prep_')
     small = Path(tmp) / 'photo.jpg'
     Image.fromarray(rgb).save(small, quality=92)
-    loc = bs.Locator()
+    loc = bs.make_locator()
     try:
         sam = bs.Sam()
         box, _ = loc.locate(str(small))

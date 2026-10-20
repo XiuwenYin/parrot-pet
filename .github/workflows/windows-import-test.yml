@@ -1,0 +1,35 @@
+# Windows 上测试"真实形象"自动抠图：按用户第一次使用的流程跑 setup.ps1（下载 Python、依赖、模型），
+# 再用测试照片和合成视频跑一遍导入。改了抠图相关的代码时自动跑，也可以手动触发。
+name: Windows 抠图测试
+
+on:
+  push:
+    paths:
+      - 'tools/**'
+      - 'tests/**'
+      - '.github/workflows/windows-import-test.yml'
+  workflow_dispatch:
+
+jobs:
+  import-test:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      PARROT_SUPPORT: ${{ runner.temp }}\parrot-pet
+      PIP_INDEX: https://pypi.org/simple      # GitHub 的机器在国外，用官方源更快
+    steps:
+      - uses: actions/checkout@v4
+      - name: 准备环境（setup.ps1，和用户点"下载自动抠图工具"一样）
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools\setup.ps1
+      - name: 检查运行库（用户电脑上不一定装了 VC++ 运行库）
+        shell: powershell
+        run: |
+          $capi = Join-Path $env:PARROT_SUPPORT 'python\Lib\site-packages\onnxruntime\capi'
+          Get-ChildItem $capi -Filter '*.dll' | Select-Object Name, Length | Format-Table
+          Get-ChildItem (Join-Path $env:PARROT_SUPPORT 'python') -Filter 'vcruntime*.dll' | Select-Object Name
+      - name: 导入测试
+        shell: powershell
+        run: |
+          & (Join-Path $env:PARROT_SUPPORT 'python\python.exe') tests\ci_import_test.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

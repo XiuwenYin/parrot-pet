@@ -25,6 +25,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')   # Windows 控制台默认 GBK，进度 JSON 里有中文
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import birdseg as bs  # noqa: E402
 
@@ -124,13 +126,47 @@ def import_photo(path, species, out_root, tmp, sam, loc, action=None):
 
 
 def extract_frames(path, fps, tmp, start=None, end=None, sub='frames'):
-    binp = Path(__file__).resolve().parent / '.bin' / 'extract_frames'
     d = Path(tmp) / sub
-    args = [str(binp), str(path), str(d), str(fps)]
-    if start is not None:
-        args += [str(start), str(end)]
-    subprocess.run(args, check=True, stdout=subprocess.DEVNULL)
+    binp = Path(__file__).resolve().parent / '.bin' / 'extract_frames'
+    if bs.use_vision() and binp.exists():
+        args = [str(binp), str(path), str(d), str(fps)]
+        if start is not None:
+            args += [str(start), str(end)]
+        subprocess.run(args, check=True, stdout=subprocess.DEVNULL)
+    else:
+        av_extract_frames(path, fps, d, start, end)
     return sorted(d.glob('*.png'))
+
+
+MAX_SIDE = 1080        # 抽出来的帧最长边（和 Mac 的 extract_frames 一致）
+
+
+def av_extract_frames(path, fps, d, start=None, end=None):
+    """跨平台抽帧（PyAV 自带 ffmpeg）：从 start 到 end 每隔 1/fps 秒取一帧，按手机拍摄方向转正。"""
+    import av
+    d.mkdir(parents=True, exist_ok=True)
+    start = start or 0.0
+    with av.open(str(path)) as c:
+        st = c.streams.video[0]
+        st.thread_type = 'AUTO'
+        if start > 0 and st.time_base:
+            c.seek(int(start / st.time_base), stream=st, backward=True)
+        next_t, i = start, 0
+        for fr in c.decode(st):
+            t = fr.time
+            if t is None or t + 1e-3 < next_t:
+                continue
+            if end is not None and t >= end:
+                break
+            im = fr.to_image()
+            rot = getattr(fr, 'rotation', 0) or 0          # 竖着拍的手机视频
+            if rot:
+                im = im.rotate(rot, expand=True)
+            im.thumbnail((MAX_SIDE, MAX_SIDE))
+            im.save(d / f'{i:04d}.png', compress_level=1)
+            i += 1
+            while next_t <= t + 1e-3:
+                next_t += 1.0 / fps
 
 
 LONG_VIDEO_S = 40      # 超过这个长度先粗扫
@@ -162,11 +198,20 @@ def coarse_windows(path, dur, tmp, loc):
 
 
 def video_duration(path):
+    if sys.platform == 'darwin':
+        try:
+            out = subprocess.run(['mdls', '-raw', '-name', 'kMDItemDurationSeconds', str(path)],
+                                 capture_output=True, text=True).stdout
+            return float(out)
+        except Exception:
+            pass
     try:
-        import json as _j
-        out = subprocess.run(['mdls', '-raw', '-name', 'kMDItemDurationSeconds', str(path)],
-                             capture_output=True, text=True).stdout
-        return float(out)
+        import av
+        with av.open(str(path)) as c:
+            if c.duration:
+                return c.duration / 1e6
+            st = c.streams.video[0]
+            return float(st.duration * st.time_base) if st.duration else 0.0
     except Exception:
         return 0.0
 
@@ -253,6 +298,45 @@ def vision_frames(path, fps, tmp):
     return rec, files
 
 
+def sam_full_frames(path, fps, tmp, sam, loc):
+    """纯色背景的视频（AI 生成的），不用 Mac 系统抠图时：
+    先按"和背景颜色差多少"找出鸟大概在哪，再用 MobileSAM 按这个框精抠（白色羽毛和浅灰背景很像，光靠颜色抠不干净）。"""
+    files = extract_frames(path, fps, tmp, sub='full')
+    rec = []
+    n = len(files)
+    for i, f in enumerate(files):
+        if i % 4 == 0:
+            emit(progress=round(0.05 + 0.8 * i / max(1, n), 3), stage=f'抠图 {i}/{n}')
+        rgb = np.asarray(Image.open(f).convert('RGB'))
+        H, W = rgb.shape[:2]
+        b = max(4, int(min(W, H) * 0.03))
+        border = np.concatenate([rgb[:b].reshape(-1, 3), rgb[-b:].reshape(-1, 3),
+                                 rgb[:, :b].reshape(-1, 3), rgb[:, -b:].reshape(-1, 3)])
+        bg = np.median(border, axis=0)
+        diff = np.abs(rgb.astype(np.int16) - bg.astype(np.int16)).max(axis=2)
+        fg = bs.clean(diff > 24)
+        fb = bs.bbox_of(fg)
+        if fb is None or fg.sum() < 400:
+            rec.append(None)
+            continue
+        sam.set_image(rgb)
+        pad = 0.06
+        box = [max(0, fb[0] - fb[2] * pad), max(0, fb[1] - fb[3] * pad), fb[2] * (1 + 2 * pad), fb[3] * (1 + 2 * pad)]
+        mask, bb, _ = bs.segment(sam, box, W, H, max_grow=1)
+        if bb is None or bs.iou(mask, fg) < 0.5:
+            mask, bb = fg, fb                 # SAM 抠歪了就用颜色抠的
+        im, (x0, y0) = crop_cut(rgb, mask, bb)
+        sc, label = bs.verify(loc, bs.cutout(rgb, mask), bb, tmp)
+        rec.append(dict(
+            im=im, anchor=(bb[0] + bb[2] / 2 - x0, bb[1] + bb[3] - y0), abs_anchor=(bb[0] + bb[2] / 2, bb[1] + bb[3]),
+            bbox=bb, score=1.0, raw_score=float(sc), label=label, edge=bs.edge_touch(bb, W, H),
+            area=int(mask.sum()), face=facing_of(mask),
+        ))
+    if not any(r and r['raw_score'] >= 0.3 for r in rec):
+        rec = [None for _ in rec]
+    return rec, files
+
+
 def drop_partial(rec, k=3, ratio=0.7):
     """抠出来的面积比前后几帧小很多（只抠到半只鸟）的帧丢掉。"""
     areas = [r['area'] if r else None for r in rec]
@@ -271,7 +355,7 @@ def import_video(path, species, out_root, tmp, sam, loc, action=None):
     dur = video_duration(path) or 60
     fps = 8.0
     if '.ai-' in Path(path).name:
-        rec, files = vision_frames(path, fps, tmp)
+        rec, files = vision_frames(path, fps, tmp) if bs.use_vision() else sam_full_frames(path, fps, tmp, sam, loc)
         rec = drop_partial(rec)
         if not files:
             return emit(done=True, clips=[], error='视频读不出来')
@@ -386,7 +470,9 @@ def main():
     if not (bs.MODELS / 'mobile_sam_image_encoder.onnx').exists():
         return emit(done=True, clips=[], error='抠图模型还没下载')
     tmp = tempfile.mkdtemp(prefix='parrot_import_')
-    loc = bs.Locator()
+    if not bs.has_locator():
+        return emit(done=True, clips=[], error='找鸟模型还没下载')
+    loc = bs.make_locator()
     try:
         emit(progress=0.01, stage='加载模型')
         sam = bs.Sam()
