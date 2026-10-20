@@ -275,9 +275,10 @@ const ACTIONS = [
 ];
 
 const SIZES = [
-  { id: 'small', name: '小', scale: 0.7 },
-  { id: 'medium', name: '中', scale: 1 },
-  { id: 'large', name: '大', scale: 1.4 },
+  { id: 'mini', name: '迷你', scale: 0.45 },
+  { id: 'small', name: '小', scale: 0.6 },
+  { id: 'medium', name: '中', scale: 0.8 },
+  { id: 'large', name: '大', scale: 1.05 },
 ];
 
 const familyOf = (speciesId) => (SPECIES[speciesId] || SPECIES.roseicollis).shape;

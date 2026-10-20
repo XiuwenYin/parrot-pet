@@ -23,7 +23,7 @@ const html = `<!doctype html><html><head><meta charset="utf-8"><style>
   svg.innerHTML = parrotSVG(sp.shape, sp.palette);
   const p = basePose();
   p.front = true; p.headX = -12; p.headRot = -8; p.shadow = 0.6; p.crest = 0.8;
-  makeCartoon(svg)(p);
+  makeCartoon(svg, sp.shape)(p);
 </script></body></html>`;
 
 app.whenReady().then(async () => {

@@ -14,18 +14,20 @@ const PARROT_PIVOT = {
 };
 
 const SHAPES = {
+  // scale：整只鸟的高矮胖瘦；tail：short 短 / mid 中等偏宽 / long 细长 / xlong 特别长
   // 牡丹：圆滚滚、大头、大嘴、短尾
   lovebird: { head: { s: 1.05, y: 80 }, body: { cx: 98, cy: 132, rx: 52, ry: 50 }, wing: { sx: 1, sy: 1 },
-    beak: { s: 1, dx: 0, dy: 0 }, tail: 'short' },
+    beak: { s: 1, dx: 0, dy: 0 }, tail: 'short', scale: { x: 1, y: 1 } },
   // 虎皮：苗条、小头小嘴（嘴大半藏在羽毛里）、长尾；蜡膜、喉斑、头背波浪纹、黑边翅膀
   budgie: { head: { s: 0.84, y: 88 }, body: { cx: 101, cy: 138, rx: 36, ry: 47 }, wing: { sx: 0.84, sy: 1.14 }, ringR: 7.6,
-    beak: { s: 0.62, dx: -6, dy: 8 }, tail: 'long', cere: true, throatSpots: true, stripes: true, scallopDark: true },
-  // 玄凤：中等身材、冠羽、橙色腮斑、翅膀上一道白斑、长尾
-  cockatiel: { head: { s: 0.92, y: 82 }, body: { cx: 100, cy: 134, rx: 43, ry: 48 }, wing: { sx: 0.9, sy: 1.12 },
-    beak: { s: 0.72, dx: -4, dy: 5 }, tail: 'long', crest: true, cheekSpot: true, wingBar: true },
-  // 和尚：大头、灰脸灰胸带鳞片纹、长尾
-  monk: { head: { s: 1.0, y: 80 }, body: { cx: 98, cy: 132, rx: 48, ry: 50 }, wing: { sx: 0.95, sy: 1.08 },
-    beak: { s: 0.95, dx: -1, dy: 1 }, tail: 'long', breastScallops: true },
+    beak: { s: 0.62, dx: -6, dy: 8 }, tail: 'long', scale: { x: 0.95, y: 1 },
+    cere: true, throatSpots: true, stripes: true, scallopDark: true },
+  // 玄凤：修长——身子高而窄、脖子长（头更高）、翅膀和尾巴都长；冠羽、橙色腮斑、翅膀白斑
+  cockatiel: { head: { s: 0.88, y: 70 }, body: { cx: 102, cy: 128, rx: 35, ry: 56 }, wing: { sx: 0.8, sy: 1.17 },
+    beak: { s: 0.72, dx: -4, dy: 5 }, tail: 'xlong', scale: { x: 0.95, y: 1.05 }, crest: true, cheekSpot: true, wingBar: true },
+  // 和尚：敦实——大头、胸脯饱满、身子宽，尾巴中等偏宽；灰脸灰胸带鳞片纹
+  monk: { head: { s: 1.06, y: 84 }, body: { cx: 97, cy: 136, rx: 51, ry: 48 }, wing: { sx: 1, sy: 1.02 },
+    beak: { s: 0.95, dx: -1, dy: 1 }, tail: 'mid', scale: { x: 1.03, y: 0.97 }, breastScallops: true },
 };
 
 // k<0 变暗，k>0 变亮
@@ -51,11 +53,31 @@ function parrotSVG(shapeId, p) {
   const beakT = `translate(${144 + S.beak.dx} ${76 + S.beak.dy}) scale(${S.beak.s}) translate(-144 -76)`;
   const wingT = `translate(92 104) scale(${S.wing.sx} ${S.wing.sy}) translate(-92 -104)`;
 
-  const tail = S.tail === 'long'
-    ? `<path d="M80,154 L16,188 Q16,197 26,196 L90,168 Z" fill="url(#tailGrad)" ${line(p.tail)}/>
-       <path d="M80,161 L24,192" stroke="${shade(p.tail, -0.35)}" stroke-width="1" opacity="0.45"/>`
-    : `<path d="M72,158 L40,181 Q43,191 54,187 L84,170 Z" fill="url(#tailGrad)" ${line(p.tail)}/>
-       <path d="M70,166 L48,184" stroke="${shade(p.tail, -0.35)}" stroke-width="1" opacity="0.4"/>`;
+  // 挠头时抬起来的腿：先是一团和身体同色的羽毛（大腿），再是小腿和蜷着的脚趾；脚的高度跟着头走
+  const scratchLeg = (() => {
+    const fy = 115 + (S.head.y - 80) * 1.05;          // 脚伸到脸颊后面
+    const fx = 121;
+    const ky = (156 + fy) / 2 + 4;                     // 膝盖
+    return `<g id="footFront">
+    <ellipse cx="111" cy="152" rx="8" ry="11" fill="${shade(p.belly, -0.08)}" transform="rotate(-25 111 152)" filter="url(#soft1)" opacity="0.95"/>
+    <path d="M113,146 Q${fx + 3},${ky} ${fx - 1},${ky - 6} L${fx},${fy}" stroke="${p.feet}" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M${fx},${fy} Q${fx + 5},${fy - 5} ${fx + 8},${fy - 3} M${fx},${fy} Q${fx + 5},${fy + 1} ${fx + 7},${fy + 4} M${fx},${fy} Q${fx - 3},${fy - 5} ${fx - 2},${fy - 9}"
+          stroke="${p.feet}" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+  </g>`;
+  })();
+
+  const TAILS = {
+    short: `<path d="M72,158 L40,181 Q43,191 54,187 L84,170 Z" fill="url(#tailGrad)" ${line(p.tail)}/>
+       <path d="M70,166 L48,184" stroke="${shade(p.tail, -0.35)}" stroke-width="1" opacity="0.4"/>`,
+    mid: `<path d="M76,152 L26,182 Q24,194 36,193 L88,170 Z" fill="url(#tailGrad)" ${line(p.tail)}/>
+       <path d="M78,160 L32,188" stroke="${shade(p.tail, -0.35)}" stroke-width="1.1" opacity="0.45"/>`,
+    long: `<path d="M80,154 L16,188 Q16,197 26,196 L90,168 Z" fill="url(#tailGrad)" ${line(p.tail)}/>
+       <path d="M80,161 L24,192" stroke="${shade(p.tail, -0.35)}" stroke-width="1" opacity="0.45"/>`,
+    // 玄凤：又细又长，中间两根尾羽更长
+    xlong: `<path d="M86,150 L2,190 Q0,197 9,197 L94,166 Z" fill="url(#tailGrad)" ${line(p.tail)}/>
+       <path d="M84,156 L8,193" stroke="${shade(p.tail, -0.35)}" stroke-width="1" opacity="0.45"/>`,
+  };
+  const tail = TAILS[S.tail] || TAILS.short;
 
   // 冠羽（玄凤）：三根弯羽毛，转轴在头顶，crest 参数决定竖起多少
   const crestSide = S.crest ? `<g id="crest">
@@ -264,13 +286,17 @@ function parrotSVG(shapeId, p) {
   </g>
 
   <g id="feet">
+    <!-- 远处那只脚：在后面、颜色暗一点、略高 -->
     <g id="footL">
-      <path d="M88,172 L88,183" stroke="${p.feet}" stroke-width="3.4" stroke-linecap="round"/>
-      <path d="M79,186.5 Q83,182.5 88,183 Q93,182.5 97,186.5 M88,183 L87.5,187.5" stroke="${p.feet}" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+      <path d="M96,171 L96.5,181.5" stroke="${shade(p.feet, -0.18)}" stroke-width="3.2" stroke-linecap="round"/>
+      <path d="M96.5,181.5 Q101.5,181.5 104.5,184.5 M96.5,181.5 Q100.5,183.5 102.5,186.5 M96.5,181.5 Q92.5,182.5 90.5,185"
+            stroke="${shade(p.feet, -0.18)}" stroke-width="2.4" stroke-linecap="round" fill="none"/>
     </g>
+    <!-- 近处那只脚：两趾朝前、一趾朝后 -->
     <g id="footR">
-      <path d="M108,172 L108,183" stroke="${p.feet}" stroke-width="3.4" stroke-linecap="round"/>
-      <path d="M99,186.5 Q103,182.5 108,183 Q113,182.5 117,186.5 M108,183 L107.5,187.5" stroke="${p.feet}" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+      <path d="M104,172 L104.5,183" stroke="${p.feet}" stroke-width="3.4" stroke-linecap="round"/>
+      <path d="M104.5,183 Q109.5,183 112.5,186.5 M104.5,183 Q108.5,185.5 110.5,188.5 M104.5,183 Q100,184 98,187"
+            stroke="${p.feet}" stroke-width="2.6" stroke-linecap="round" fill="none"/>
     </g>
   </g>
 
@@ -374,10 +400,7 @@ function parrotSVG(shapeId, p) {
     <rect class="strip" x="30" y="163" width="32" height="5" rx="1" fill="#fbfaf4" stroke="#cfcabd" stroke-width="0.8" transform="rotate(6 54 165)"/>
   </g>
 
-  <g id="footFront">
-    <path d="M114,124 L120,110" stroke="${p.feet}" stroke-width="3.4" stroke-linecap="round"/>
-    <path d="M114,104 L120,110 L127,106 M120,110 L124,113" stroke="${p.feet}" stroke-width="2.6" stroke-linecap="round" fill="none"/>
-  </g>
+  ${scratchLeg}
 </g>`;
 }
 
@@ -399,7 +422,8 @@ function parrotBeakTip(shapeId, p) {
   x = vx + nx + p.headX; y = vy + ny + p.headY;
   // 身体：translate(0 y) rotate(rot fx fy-50) translate(F) scale(...) translate(-F)
   const [fx, fy] = PARROT_PIVOT.feet;
-  x = fx + (x - fx) * p.sx * p.puff; y = fy + (y - fy) * p.sy * p.puff;
+  const SC = S.scale || { x: 1, y: 1 };
+  x = fx + (x - fx) * p.sx * p.puff * SC.x; y = fy + (y - fy) * p.sy * p.puff * SC.y;
   const c2 = Math.cos(rad(p.rot)), s2 = Math.sin(rad(p.rot));
   const ox = fx, oy = fy - 50;
   [x, y] = [ox + (x - ox) * c2 - (y - oy) * s2, oy + (x - ox) * s2 + (y - oy) * c2];
@@ -420,7 +444,8 @@ function basePose() {
   };
 }
 
-function makeCartoon(svg) {
+function makeCartoon(svg, shapeId) {
+  const SC = (SHAPES[shapeId] || SHAPES.lovebird).scale || { x: 1, y: 1 };
   const $ = (id) => svg.querySelector('#' + id);
   const els = {
     pose: $('pose'), head: $('head'), wing: $('wing'), jaw: $('jaw'), eye: $('eye'),
@@ -440,7 +465,7 @@ function makeCartoon(svg) {
   return function apply(p) {
     const [fx, fy] = P.feet;
     els.pose.setAttribute('transform',
-      `translate(0 ${p.y}) rotate(${p.rot} ${fx} ${fy - 50}) translate(${fx} ${fy}) scale(${p.sx * p.puff} ${p.sy * p.puff}) translate(${-fx} ${-fy})`);
+      `translate(0 ${p.y}) rotate(${p.rot} ${fx} ${fy - 50}) translate(${fx} ${fy}) scale(${p.sx * p.puff * SC.x} ${p.sy * p.puff * SC.y}) translate(${-fx} ${-fy})`);
     const [nx, ny] = P.neck;
     els.head.setAttribute('transform',
       `translate(${nx + p.headX} ${ny + p.headY}) scale(${p.headFlip * p.headPuff} ${p.headPuff}) rotate(${p.headRot}) translate(${-nx} ${-ny})`);

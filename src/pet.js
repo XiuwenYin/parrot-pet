@@ -71,7 +71,7 @@
     svg.innerHTML = parrotSVG(family, sp.palette);
     Sound.setVoice(traits.voice);
     gnawTip = null;
-    applyCartoon = makeCartoon(svg);
+    applyCartoon = makeCartoon(svg, family);
     Sound.setMuted(settings.muted);
     useReal = false;
     if (settings.mode === 'real') {

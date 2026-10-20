@@ -67,17 +67,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          cat > notes.md <<'NOTES'
+          下载说明：
+          - **Mac（M1/M2/M3/M4 等 Apple 芯片）**：ParrotPet-*-mac-arm64（.dmg 或 .zip）
+          - **Mac（Intel 芯片）**：ParrotPet-*-mac-x64（.dmg 或 .zip）
+          - **Windows**：ParrotPet-*-win-x64.exe
+
+          .zip 版：双击解压，把「鹦鹉桌宠」拖进「应用程序」文件夹。
+
+          第一次打开：
+          - Mac：安装包没有苹果开发者签名。打开时如果提示「无法验证开发者」或「已损坏」，到 系统设置 → 隐私与安全性，点「仍要打开」；或者在终端运行 `xattr -cr /Applications/鹦鹉桌宠.app` 后再打开。
+          - Windows：如果出现「Windows 已保护你的电脑」，点「更多信息」→「仍要运行」。
+
+          Windows 版暂不支持：啃桌面图标、视频/照片自动抠图（这两项用到了 macOS 的系统能力）。
+          NOTES
           gh release create "${{ github.ref_name }}" out/* \
             --repo "${{ github.repository }}" \
             --title "鹦鹉桌宠 ${{ github.ref_name }}" \
-            --notes "下载说明：
-          - **Mac（M1/M2/M3/M4 等 Apple 芯片）**：ParrotPet-*-mac-arm64（.dmg 或 .zip）
-          - **Mac（Intel 芯片）**：ParrotPet-*-mac-x64（.dmg 或 .zip）
-          - .zip 版：双击解压，把"鹦鹉桌宠"拖进"应用程序"文件夹
-          - **Windows**：ParrotPet-*-win-x64.exe
-
-          第一次打开：
-          - Mac：安装包没有苹果开发者签名。打开时如果提示"无法验证开发者"或"已损坏"，到 系统设置 → 隐私与安全性，点"仍要打开"；或者在终端运行 \`xattr -cr /Applications/鹦鹉桌宠.app\` 后再打开。
-          - Windows：如果出现"Windows 已保护你的电脑"，点"更多信息" → "仍要运行"。
-
-          Windows 版暂不支持：啃桌面图标、视频/照片自动抠图（这两项用到了 macOS 的系统能力）。"
+            --notes-file notes.md

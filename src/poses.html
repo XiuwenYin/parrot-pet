@@ -44,7 +44,7 @@
       if (id === 'paper' && t > 3 && SPECIES[species].shape === 'lovebird') p.tailPaper = 3;
       if (id === 'nest' && SPECIES[species].shape === 'monk') p.twigPile = 4;
       if (SPECIES[species].shape !== 'cockatiel') p.crest = 0;
-      makeCartoon(svg)(p);
+      makeCartoon(svg, SPECIES[species].shape)(p);
     }
   </script>
 </body>

@@ -40,7 +40,7 @@ function saveSettings() {
 }
 
 function sizeScale() {
-  return (SIZES.find(s => s.id === settings.size) || SIZES[1]).scale;
+  return (SIZES.find(s => s.id === settings.size) || SIZES.find(s => s.id === 'medium')).scale;
 }
 
 function createWindow() {
