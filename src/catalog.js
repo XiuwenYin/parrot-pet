@@ -119,6 +119,21 @@ const SPECIES = {
       cere: '#E8B4B8', cheekPatch: '#EDEAF6', stripe: '#E3CF7A', scallop: '#DCC572', throatSpot: '#E2CF92',
     },
   },
+  // 金彩显：彩虹（黄脸 + 蛋白石 + 灰翅/亮翅）再带显性派特。金黄的额头脸颊，后脑和背是淡淡的蓝紫，
+  // 翅膀奶油黄、几乎没有黑斑，肚子一块块浅色派特斑
+  budgieGoldRainbow: {
+    name: '金彩显虎皮',
+    shape: 'budgie',
+    palette: {
+      body: '#BFC9EE', bodyDark: '#8E9ED6', belly: '#F6EDC2',
+      wing: '#F3E8B0', wingEdge: '#D9CB8F', flight: '#EDE6CC',
+      rump: '#B3C1EC', tail: '#A6B4E0',
+      head: '#E4E5F0', face: '#F6E489', forehead: '#F4D65C',
+      beak: '#EFD592', beakDark: '#C9A55E',
+      eye: '#1B1B1B', eyeRing: '#F4EFE2', feet: '#E9B9B6',
+      cere: '#E8C6B0', cheekPatch: '#B7A9E2', stripe: '#C2BDD6', scallop: '#E4D59E', throatSpot: '#CBC1E0',
+    },
+  },
   // ---------- 玄凤鹦鹉 ----------
   cockatielGrey: {
     name: '原始灰玄凤',
