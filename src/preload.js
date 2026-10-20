@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('pet', {
   move: (x, y) => ipcRenderer.send('move', x, y),
   setIgnoreMouse: (ignore) => ipcRenderer.send('set-ignore-mouse', ignore),
-  getEnv: () => ipcRenderer.invoke('get-env'),
+  getEnv: (opts) => ipcRenderer.invoke('get-env', opts || {}),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   listRealAssets: (species) => ipcRenderer.invoke('list-real-assets', species),
   showMenu: () => ipcRenderer.send('context-menu'),

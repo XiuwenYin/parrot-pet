@@ -199,7 +199,9 @@ function createTray() {
   const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', IS_MAC ? 'trayTemplate.png' : 'tray.png'));
   if (IS_MAC) icon.setTemplateImage(true);
   tray = new Tray(icon);
-  tray.setToolTip('鹦鹉桌宠');
+  tray.setToolTip('鹦鹉桌宠（点一下叫它回来）');
+  // Windows 上左键点托盘图标就叫回来，右键才是菜单（Mac 点一下照常弹菜单）
+  if (!IS_MAC) tray.on('click', () => send('come-back'));
   rebuildTray();
 }
 
@@ -345,11 +347,20 @@ ipcMain.on('set-ignore-mouse', (_e, ignore) => {
   if (win && !win.isDestroyed()) win.setIgnoreMouseEvents(ignore, { forward: true });
 });
 
-ipcMain.handle('get-env', () => {
+// 鸟"住"在哪块屏幕上：平时只认这一块的地面和边界，不按窗口离哪块屏幕近来算
+// （多屏时鸟爬到屏幕顶上、窗口探出去一点，会被算到另一块屏幕，地面一换就"瞬间掉过去"）。
+// 只有被拖到别的屏幕上松手（rehome）、或叫它回来时才换
+let homeDisplayId = null;
+function homeDisplay() {
+  const all = screen.getAllDisplays();
+  return all.find(d => d.id === homeDisplayId) || screen.getPrimaryDisplay();
+}
+ipcMain.handle('get-env', (_e, opts = {}) => {
   const [x, y] = win.getPosition();
   const [w, h] = win.getSize();
-  const display = screen.getDisplayNearestPoint({ x: x + w / 2, y: y + h / 2 });
-  return { x, y, w, h, workArea: display.workArea, cursor: screen.getCursorScreenPoint(), debug: !!process.env.PET_DEBUG };
+  if (opts.rehome || homeDisplayId === null) homeDisplayId = screen.getDisplayNearestPoint({ x: x + w / 2, y: y + h * 0.8 }).id;
+  if (opts.toCursor) homeDisplayId = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id;
+  return { x, y, w, h, workArea: homeDisplay().workArea, cursor: screen.getCursorScreenPoint(), debug: !!process.env.PET_DEBUG };
 });
 
 ipcMain.handle('get-settings', () => settings);
@@ -449,7 +460,13 @@ ipcMain.on('context-menu', () => {
   });
 });
 
+// 只开一只鸟：再双击一次桌面/开始菜单里的图标，就把跑丢的鸟叫回到鼠标所在的屏幕
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) app.quit();
+app.on('second-instance', () => send('come-back'));
+
 app.whenReady().then(() => {
+  if (!gotLock) return;
   loadSettings();
   if (process.platform === 'darwin' && app.dock) app.dock.hide();
   createWindow();

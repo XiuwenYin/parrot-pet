@@ -914,13 +914,14 @@
     samples = [];
   });
 
-  document.addEventListener('mouseup', (e) => {
+  document.addEventListener('mouseup', async (e) => {
     if (!press) return;
     const wasDrag = dragging;
     press = null;
     dragging = false;
     lastInteract = performance.now();
     if (wasDrag) {
+      env = await api.getEnv({ rehome: true });   // 被拖到哪块屏幕，就住到哪块屏幕
       const now = performance.now();
       const s0 = samples[0];
       const s1 = samples[samples.length - 1];
@@ -1024,10 +1025,13 @@
       if (arg.done) lines.push('正在自动抠图导入…');
       say(lines.join('\n'), 8000);
     } else if (cmd === 'come-back') {
-      env = await api.getEnv();
-      pos.x = wa().x + wa().width * 0.7;
-      pos.y = wa().y;
+      // 回到鼠标所在的屏幕，从鼠标上方掉下来
+      env = await api.getEnv({ toCursor: true });
+      const c = env.cursor;
+      pos.x = Math.max(minX(), Math.min(maxX(), c.x - 100 * scale()));
+      pos.y = Math.max(wa().y, Math.min(groundY(), c.y - 220 * scale()));
       setState('thrown', { vx: 0, vy: 0, quiet: true });
+      Sound.chirp(2);
       say('我回来啦！');
     }
   });
@@ -1130,6 +1134,16 @@
       pos.y = groundY();
       setState('idle', { quiet: true });
     }
+    // 兜底：不在被拖着的时候，窗口至少要留一大块在自己那块屏幕里，别跑到屏幕外面回不来
+    if (cur.id !== 'drag' && !dragging) {
+      const k = scale(), W = wa();
+      const x0 = W.x - 240 * k, x1 = W.x + W.width - 40 * k, y0 = W.y - 240 * k, y1 = groundY() + 200 * k;
+      if (pos.x < x0 || pos.x > x1 || pos.y < y0 || pos.y > y1) {
+        pos.x = Math.max(x0, Math.min(x1, pos.x));
+        pos.y = Math.max(y0, Math.min(y1, pos.y));
+        if (!AIRBORNE.includes(cur.id) && !['climb', 'iconclimb', 'peekaboo'].includes(cur.id)) setState('thrown', { vx: 0, vy: 0, quiet: true });
+      }
+    }
     syncBubbleScale();
     if (menuHold) { pos.x = menuHold.x; pos.y = menuHold.y; }
     if (Math.abs(pos.x - sentX) >= 0.5 || Math.abs(pos.y - sentY) >= 0.5) {
@@ -1151,6 +1165,8 @@
   if (userName() && petName()) say(`${userName()}，${petName()}来啦～`, 2500);
   else if (petName()) say(`${petName()}来啦～`, 2500);
   else say(pickOne(lines('click')) + ' 我是' + (SPECIES[settings.species] || SPECIES.roseicollis).name, 2500);
+  // Windows 的托盘图标默认藏在 ^ 里，告诉一下怎么把跑丢的鸟叫回来
+  if (/Win/.test(navigator.platform)) setTimeout(() => say('找不到我了？再双击一下桌面上的"鹦鹉桌宠"图标，我就回来', 5000), 3500);
   requestAnimationFrame(frame);
 
   if (MOCK) window.__petDebug = { setState, cur: () => cur, pose: () => shownPose, dir: () => shownDir, inertia: () => ({ lean, velX, x: pos.x, dir }), pause: (v) => { paused = v; }, flip: () => flipAngle, pos: () => ({ ...pos }), act: (id) => startAction(id), at: (id, t) => { setState(id, { quiet: true, dur: 99 }); cur.t = t; paused = true; } };
