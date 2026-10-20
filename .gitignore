@@ -1,0 +1,6 @@
+node_modules/
+dist/
+tools/.bin/
+.DS_Store
+# 个人素材（自己的鸟的视频、照片、抠好的图）不进仓库
+assets/real/

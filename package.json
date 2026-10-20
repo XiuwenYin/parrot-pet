@@ -1,0 +1,81 @@
+{
+  "name": "parrot-pet",
+  "version": "0.1.0",
+  "description": "鹦鹉桌宠：牡丹、虎皮、玄凤、和尚，插画风卡通形象 / 真实形象可切换，每种鸟有自己的习性",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "icon": "electron tools/make_icon.js",
+    "helpers": "zsh tools/build_helpers.sh",
+    "dist:mac": "zsh tools/build_helpers.sh && electron-builder --mac",
+    "dist:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "productName": "鹦鹉桌宠",
+  "author": "XiuwenYin",
+  "license": "UNLICENSED",
+  "private": true,
+  "build": {
+    "appId": "com.xiuwenyin.parrotpet",
+    "productName": "鹦鹉桌宠",
+    "copyright": "Copyright © 2026 XiuwenYin",
+    "artifactName": "ParrotPet-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "src/**/*",
+      "assets/tray*.png",
+      "assets/trayTemplate*.png",
+      "tools/*.py",
+      "tools/*.sh",
+      "tools/*.swift",
+      "tools/.bin/**/*",
+      "!src/poses.html"
+    ],
+    "asarUnpack": [
+      "tools/**/*"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.entertainment",
+      "identity": null,
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "需要知道桌面图标的位置，鹦鹉才能去\"啃\"它（只是画面效果，不会动你的文件）。",
+        "LSUIElement": true
+      }
+    },
+    "dmg": {
+      "title": "鹦鹉桌宠 ${version}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "鹦鹉桌宠",
+      "createDesktopShortcut": true
+    }
+  }
+}

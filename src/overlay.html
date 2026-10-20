@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>咬痕</title>
+  <style>
+    html, body { margin: 0; background: transparent; overflow: hidden; }
+    svg { position: fixed; inset: 0; width: 100vw; height: 100vh; }
+    .mark { transition: opacity .4s; }
+    .mark.hidden { opacity: 0; }
+    .mark.fading { opacity: 0; transition: opacity 3s; }
+  </style>
+</head>
+<body>
+  <svg id="layer" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="0.7"/></filter>
+      <filter id="inner" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="2.2" result="b"/>
+        <feComposite in="SourceAlpha" in2="b" operator="out" result="ring"/>
+        <feFlood flood-color="#000" flood-opacity="0.55"/>
+        <feComposite in2="ring" operator="in" result="shadow"/>
+        <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="shadow"/></feMerge>
+      </filter>
+    </defs>
+  </svg>
+  <script src="overlay.js"></script>
+</body>
+</html>

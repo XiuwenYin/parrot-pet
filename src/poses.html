@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>姿态一览</title>
+  <style>
+    body { font-family: -apple-system, "PingFang SC", sans-serif; background: #eef1f4; margin: 12px; }
+    #grid { display: grid; grid-template-columns: repeat(auto-fill, 150px); gap: 8px; }
+    figure { margin: 0; background: #fff; border-radius: 8px; padding: 4px; text-align: center; font-size: 12px; }
+    svg { width: 140px; height: 140px; overflow: visible; }
+  </style>
+</head>
+<body>
+  <!-- 开发用：把每个动作在某一时刻的姿态画成一格，方便调形状。?species=fischeri 换鸟种 -->
+  <select id="sp"></select>
+  <div id="grid"></div>
+  <script src="catalog.js"></script>
+  <script src="parrot.js"></script>
+  <script src="actions.js"></script>
+  <script>
+    const SHOTS = [
+      ['idle', 1], ['walk', 0.17], ['fly', 0.04, { phase: 'cruise' }], ['fly', 0.11, { phase: 'cruise' }],
+      ['eat', 0.15], ['preen', 0.5], ['scratch', 0.5], ['stretch', 0.8], ['stretch', 2],
+      ['sing', 0.08], ['dance', 0.12], ['paper', 1.5], ['paper', 2.2], ['paper', 3.3],
+      ['look', 0.5], ['look', 0.7, { front: true }], ['idle', 2, { front: true }], ['sleep', 1], ['happy', 0.3], ['angry', 0.3], ['drag', 0.1, { vx: 600 }],
+      ['thrown', 0.2, { spin: 60 }], ['dizzy', 0.4], ['hang', 0.5],
+      ['mirror', 1.0], ['talk', 0.08], ['whistle', 0.5], ['heartwing', 1.2], ['headdown', 1.5],
+      ['nest', 0.6], ['nest', 2.0], ['nest', 3.0], ['quake', 0.1], ['nibble', 0.3], ['hiss', 0.3], ['fright', 0.2],
+    ];
+    const params = new URLSearchParams(location.search);
+    const species = params.get('species') || 'roseicollis';
+    const sel = document.getElementById('sp');
+    Object.entries(SPECIES).forEach(([id, s]) => sel.add(new Option(s.name, id, false, id === species)));
+    sel.onchange = () => { location.search = '?species=' + sel.value; };
+    const grid = document.getElementById('grid');
+    for (const [id, t, s] of SHOTS) {
+      const fig = document.createElement('figure');
+      fig.innerHTML = `<svg viewBox="0 0 200 200">${parrotSVG(SPECIES[species].shape, SPECIES[species].palette)}</svg><figcaption>${id} @${t}s</figcaption>`;
+      grid.appendChild(fig);
+      const svg = fig.querySelector('svg');
+      if (id === 'hang') svg.style.transform = 'rotate(180deg)';
+      const p = basePose();
+      POSES[id](t, { seed: 0.3, ...(s || {}) }, p);
+      if (id === 'paper' && t > 3 && SPECIES[species].shape === 'lovebird') p.tailPaper = 3;
+      if (id === 'nest' && SPECIES[species].shape === 'monk') p.twigPile = 4;
+      if (SPECIES[species].shape !== 'cockatiel') p.crest = 0;
+      makeCartoon(svg)(p);
+    }
+  </script>
+</body>
+</html>
