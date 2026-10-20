@@ -15,10 +15,12 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     env:
-      PARROT_SUPPORT: ${{ runner.temp }}\parrot-pet
       PIP_INDEX: https://pypi.org/simple      # GitHub 的机器在国外，用官方源更快
     steps:
       - uses: actions/checkout@v4
+      - name: 数据目录放在临时目录
+        shell: powershell
+        run: Add-Content -Path $env:GITHUB_ENV -Value "PARROT_SUPPORT=$env:RUNNER_TEMP\parrot-pet"
       - name: 准备环境（setup.ps1，和用户点"下载自动抠图工具"一样）
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tools\setup.ps1
