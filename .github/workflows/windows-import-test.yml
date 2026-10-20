@@ -19,20 +19,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 数据目录放在临时目录
-        shell: powershell
+        shell: pwsh
         run: Add-Content -Path $env:GITHUB_ENV -Value "PARROT_SUPPORT=$env:RUNNER_TEMP\parrot-pet"
       - name: 准备环境（setup.ps1，和用户点"下载自动抠图工具"一样）
-        shell: powershell
+        shell: pwsh
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tools\setup.ps1
       - name: 检查运行库（用户电脑上不一定装了 VC++ 运行库）
-        shell: powershell
+        shell: pwsh
         run: |
           $capi = Join-Path $env:PARROT_SUPPORT 'python\Lib\site-packages\onnxruntime\capi'
           Get-ChildItem $capi -Filter '*.dll' | Select-Object Name, Length | Format-Table
           Get-ChildItem (Join-Path $env:PARROT_SUPPORT 'python') -Filter '*140*.dll' | Select-Object Name
           if (-not (Test-Path (Join-Path $env:PARROT_SUPPORT 'python\msvcp140.dll'))) { throw '缺少 msvcp140.dll' }
       - name: 导入测试
-        shell: powershell
+        shell: pwsh
         run: |
           & (Join-Path $env:PARROT_SUPPORT 'python\python.exe') tests\ci_import_test.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
