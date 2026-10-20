@@ -39,14 +39,17 @@ html, body {
   left: 50%;
   top: 4px;
   transform: translate(-50%, 6px) scale(0.9);
-  max-width: 200px;
-  padding: 6px 12px;
-  border-radius: 14px;
+  /* 字号固定：页面按鸟的大小整体缩放，这里乘 --inv 抵消掉；最宽不超过窗口 */
+  max-width: calc(100% - 6px);
+  width: max-content;
+  padding: calc(5px * var(--inv, 1)) calc(10px * var(--inv, 1));
+  border-radius: calc(12px * var(--inv, 1));
   background: rgba(255, 255, 255, 0.96);
   color: #333;
-  font-size: 13px;
+  font-size: calc(12.5px * var(--inv, 1));
   line-height: 1.35;
   white-space: pre-line;
+  box-sizing: border-box;
   text-align: center;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
   opacity: 0;

@@ -33,7 +33,8 @@
   let traits = FAMILIES.lovebird;
   let hopT = 1;           // 点击时的小跳
   const CLIMB_LEAN = 20;  // 爬墙时身子往后仰的角度
-  let menuOpen = false;   // 右键菜单开着：鸟原地停住
+  let menuOpen = false;   // 右键菜单开着：窗口原地不动（菜单才不会跟着跑），但鸟照常动
+  let menuHold = null;
   let flipAngle = 0;      // 倒挂时舞台的旋转角度（慢慢转过去）
   // ---- 动作衔接：换动作时从当前姿势过渡过去，加上惯性、转身、落地缓冲 ----
   let shownPose = null;   // 上一帧实际画出来的姿势
@@ -91,6 +92,12 @@
 
   // ---------- 世界 ----------
   const scale = () => env.w / WIN_W;
+  // 页面整体按鸟的大小缩放，对话框反着补回去，字号在所有大小下都一样
+  let bubbleInv = 0;
+  const syncBubbleScale = () => {
+    const inv = 1 / (scale() || 1);
+    if (Math.abs(inv - bubbleInv) > 1e-3) { bubbleInv = inv; document.documentElement.style.setProperty('--inv', inv.toFixed(4)); }
+  };
   const wa = () => env.workArea;
   const groundY = () => wa().y + wa().height - FOOT_Y * scale();
   const ceilY = () => wa().y - HANG_FOOT_Y * scale() + 2;
@@ -781,7 +788,12 @@
 
   // ---------- 菜单命令 ----------
   api.onMenu(async (cmd, arg) => {
-    if (cmd === 'menu-open') menuOpen = arg;
+    if (cmd === 'menu-open') {
+      menuOpen = arg;
+      menuHold = arg ? { x: pos.x, y: pos.y } : null;
+      // 正在地上走的就停下来，转头看着你
+      if (arg && ['walk', 'walkto'].includes(cur.id)) setState('look', { quiet: true });
+    }
     else if (cmd === 'settings') { settings = arg; await applySettings(); }
     else if (cmd === 'action') startAction(arg);
     else if (cmd === 'import-need-setup') {
@@ -835,7 +847,7 @@
 
   let paused = false;
   function frame(now) {
-    const dt = paused || menuOpen ? 0 : Math.min(0.05, (now - last) / 1000);
+    const dt = paused ? 0 : Math.min(0.05, (now - last) / 1000);
     last = now;
     cur.t += dt;
     const b = BEHAVIORS[cur.id];
@@ -919,6 +931,8 @@
       pos.y = groundY();
       setState('idle', { quiet: true });
     }
+    syncBubbleScale();
+    if (menuHold) { pos.x = menuHold.x; pos.y = menuHold.y; }
     if (Math.abs(pos.x - sentX) >= 0.5 || Math.abs(pos.y - sentY) >= 0.5) {
       api.move(pos.x, pos.y);
       sentX = pos.x; sentY = pos.y;
