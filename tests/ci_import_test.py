@@ -18,6 +18,8 @@ import av
 import numpy as np
 from PIL import Image
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')   # Windows 控制台默认不是 UTF-8
 ROOT = Path(__file__).resolve().parent.parent
 PHOTO = ROOT / 'tests' / 'fixtures' / 'cockatiel_cc0.jpg'
 ENV = {**os.environ, 'PARROT_LOCATOR': 'onnx', 'PYTHONIOENCODING': 'utf-8'}

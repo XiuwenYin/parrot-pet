@@ -29,7 +29,8 @@ jobs:
         run: |
           $capi = Join-Path $env:PARROT_SUPPORT 'python\Lib\site-packages\onnxruntime\capi'
           Get-ChildItem $capi -Filter '*.dll' | Select-Object Name, Length | Format-Table
-          Get-ChildItem (Join-Path $env:PARROT_SUPPORT 'python') -Filter 'vcruntime*.dll' | Select-Object Name
+          Get-ChildItem (Join-Path $env:PARROT_SUPPORT 'python') -Filter '*140*.dll' | Select-Object Name
+          if (-not (Test-Path (Join-Path $env:PARROT_SUPPORT 'python\msvcp140.dll'))) { throw '缺少 msvcp140.dll' }
       - name: 导入测试
         shell: powershell
         run: |

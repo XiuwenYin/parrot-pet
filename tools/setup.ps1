@@ -54,7 +54,8 @@ if ($LASTEXITCODE -ne 0) {
   if ($LASTEXITCODE -ne 0) { throw 'pip 安装失败' }
   Remove-Item $gp
 }
-$pkgs = @('onnxruntime', 'numpy', 'pillow', 'scipy', 'av', 'pillow-heif')
+# msvc-runtime：把 VC++ 运行库（msvcp140.dll 等）装进 Python 目录，没装过 VC++ 运行库的电脑也能加载 onnxruntime
+$pkgs = @('onnxruntime', 'numpy', 'pillow', 'scipy', 'av', 'pillow-heif', 'msvc-runtime')
 $index = if ($env:PIP_INDEX) { $env:PIP_INDEX } else { 'https://pypi.tuna.tsinghua.edu.cn/simple' }
 & $Python -m pip install -q --no-warn-script-location -i $index @pkgs
 if ($LASTEXITCODE -ne 0) {
