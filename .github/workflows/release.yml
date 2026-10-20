@@ -79,7 +79,9 @@ jobs:
           - Mac：安装包没有苹果开发者签名。打开时如果提示「无法验证开发者」或「已损坏」，到 系统设置 → 隐私与安全性，点「仍要打开」；或者在终端运行 `xattr -cr /Applications/鹦鹉桌宠.app` 后再打开。
           - Windows：如果出现「Windows 已保护你的电脑」，点「更多信息」→「仍要运行」。
 
-          Windows 版暂不支持：啃桌面图标、视频/照片自动抠图（这两项用到了 macOS 的系统能力）。
+          Windows 版暂不支持爬、啃桌面图标（用到了 macOS 的系统能力）；视频/照片自动抠图 Mac 和 Windows 都支持。
+
+          鸟找不到了：再双击一次桌面上的「鹦鹉桌宠」图标，它会回到鼠标所在的屏幕；Windows 上左键点托盘图标也能叫它回来。
           NOTES
           gh release create "${{ github.ref_name }}" out/* \
             --repo "${{ github.repository }}" \
