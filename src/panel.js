@@ -94,7 +94,9 @@ function render() {
   // 我的鸟
   if (document.activeElement !== $('userName')) $('userName').value = st.userName;
   if (document.activeElement !== $('petName')) $('petName').value = st.petName;
-  $('petName').placeholder = `这只${sp.name}叫什么`;
+  // 预览跟着"大小"一起变
+  const sc = (SIZES.find(z => z.id === st.size) || { scale: 0.8 }).scale;
+  $('preview').style.setProperty('--pv', Math.round(190 * sc) + 'px');
   seg($('modeSeg'), MODES.map(m => ({ id: m.id, name: m.id === 'real' ? '真实素材' : m.name })), st.mode, (v) => window.panel.set('mode', v));
   seg($('sizeSeg'), SIZES, st.size, (v) => window.panel.set('size', v));
   sw('beanEyes', st.beanEyes);
