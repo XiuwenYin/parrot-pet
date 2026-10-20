@@ -377,6 +377,8 @@ function parrotSVG(shapeId, p) {
     ${NS ? '' : `<ellipse cx="118" cy="104" rx="26" ry="12" fill="${p.face}" opacity="0.55" filter="url(#soft3)"/>`}
     <circle cx="114" cy="74" r="36" fill="url(#headGrad)" mask="url(#${NS ? 'headSoftFull' : 'headFade'})"/>
     ${NS ? '' : `<path d="M78.9,82 A36,36 0 1 1 149.1,82" fill="none" ${line(p.head)}/>`}
+    <!-- 五官：转头时只把它们压扁、淡出，头本身保持圆的（转到一半看到的是后脑勺），脖子不会断 -->
+    <g id="headFeat">
     <g ${NS ? 'mask="url(#headSoft)"' : 'clip-path="url(#headClip)"'}>
       <path d="M124,37 C142,38 158,56 157,78 C156,100 142,114 118,116 C104,112 96,100 98,88 C100,78 108,72 112,64 C115,54 116,44 124,37 Z" fill="url(#faceGrad)" filter="url(#${p.faceSoft || 'soft4'})"/>
       <ellipse cx="128" cy="46" rx="16" ry="8" fill="#fff" opacity="0.22" filter="url(#soft3)"/>
@@ -402,6 +404,7 @@ function parrotSVG(shapeId, p) {
       <path d="M146,64.5 C153,66 157,71 158.5,77" stroke="#fff" stroke-width="1.6" fill="none" opacity="0.45" stroke-linecap="round"/>
       <rect id="beakPaper" x="150" y="88" width="34" height="5" rx="1" fill="#fbfaf4" stroke="#cfcabd" stroke-width="0.8" transform="rotate(28 150 88)"/>
       <path id="beakTwig" d="M146,90 L196,104 M176,98 L184,90" stroke="#8a6440" stroke-width="3.4" stroke-linecap="round"/>
+    </g>
     </g>
    </g>
    <!-- 正脸：盯着你看的时候用 -->
@@ -508,7 +511,7 @@ function makeCartoon(svg, shapeId) {
     crest: $('crest'), crestFront: $('crestFront'),
     upper: $('upper'), upperBack: $('upperBack'), legLineL: $('legLineL'), legLineR: $('legLineR'),
     mirror: $('mirror'), beakTwig: $('beakTwig'), twigGround: $('twigGround'),
-    neckFill: $('neckFill'), neckSil: $('neckSil'), headSil: $('headSil'),
+    neckFill: $('neckFill'), neckSil: $('neckSil'), headSil: $('headSil'), headFeat: $('headFeat'),
     neckGrad: svg.querySelector('radialGradient[id^="neckGrad"]'),
   };
   const strips = [...svg.querySelectorAll('#tailPaper .strip')];
@@ -524,13 +527,16 @@ function makeCartoon(svg, shapeId) {
   const stops = els.neckGrad ? [...els.neckGrad.querySelectorAll('stop')] : [];
   const neckClipPath = $('neckClipPath'), collarBand = $('collarBand');
   const setNeck = (d) => { els.neckFill.setAttribute('d', d); els.neckSil.setAttribute('d', d); if (neckClipPath) neckClipPath.setAttribute('d', d); };
-  function drawNeck(p) {
+  // 头的圆心：先按 headT 放好（114, head.y），再绕脖子转、按 headFlip 左右移、平移
+  function headCenter(p) {
     const [nx, ny] = P.neck;
-    // 头的圆心：先按 headT 放好（114, head.y），再按头的变换（绕脖子转、缩放、平移）
     const qx = 114 - nx, qy = SH.head.y - ny;
     const a = p.headRot * Math.PI / 180;
     const rx = qx * Math.cos(a) - qy * Math.sin(a), ry = qx * Math.sin(a) + qy * Math.cos(a);
-    const hx = nx + p.headX + rx * p.headFlip * p.headPuff, hy = ny + p.headY + ry * p.headPuff;
+    return { x: nx + p.headX + rx * p.headFlip * p.headPuff, y: ny + p.headY + ry * p.headPuff };
+  }
+  function drawNeck(p) {
+    const { x: hx, y: hy } = headCenter(p);
     // 脖子和头一样宽：轮廓从头两侧直接顺下去，整只鸟是一颗"豆子"，不在头下面收腰
     const r1 = HEAD_R * p.headPuff, r2 = BASE.r;
     const dx = BASE.x - hx, dy = BASE.y - hy, d = Math.hypot(dx, dy);
@@ -572,7 +578,15 @@ function makeCartoon(svg, shapeId) {
     els.pose.setAttribute('transform',
       `translate(0 ${p.y}) rotate(${p.rot} ${fx} ${fy - 50}) translate(${fx} ${fy}) scale(${p.sx * p.puff * SC.x} ${p.sy * p.puff * SC.y}) translate(${-fx} ${-fy})`);
     const [nx, ny] = P.neck;
-    const headTf = `translate(${nx + p.headX} ${ny + p.headY}) scale(${p.headFlip * p.headPuff} ${p.headPuff}) rotate(${p.headRot}) translate(${-nx} ${-ny})`;
+    // 头的中心照常跟着 headFlip 连续移动；但头只按正负号镜像，不压扁（压扁会只剩一条缝，和脖子断开）
+    const hc = headCenter(p);
+    const sg = p.headFlip >= 0 ? 1 : -1, af = Math.abs(p.headFlip);
+    const headTf = `translate(${hc.x} ${hc.y}) scale(${sg * p.headPuff} ${p.headPuff}) rotate(${p.headRot}) translate(-114 ${-SH.head.y})`;
+    if (els.headFeat) {
+      els.headFeat.setAttribute('transform', af < 0.999 ? `translate(114 74) scale(${Math.max(0.05, af).toFixed(3)} 1) translate(-114 -74)` : '');
+      const k = Math.max(0, Math.min(1, (af - 0.2) / 0.35));
+      els.headFeat.setAttribute('opacity', (k * k * (3 - 2 * k)).toFixed(3));
+    }
     els.head.setAttribute('transform', headTf);
     if (els.headSil) els.headSil.setAttribute('transform', headTf);
     els.wing.setAttribute('transform', `rotate(${p.wing} ${P.shoulder[0]} ${P.shoulder[1]})`);
