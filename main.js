@@ -1,6 +1,6 @@
 // 鹦鹉桌宠 — Electron 主进程
 // 窗口本身就是"鸟"：透明、无边框、置顶；渲染进程算物理，主进程负责挪窗口、菜单、读素材。
-const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage, dialog, shell, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { SPECIES, FAMILIES, MODES, ACTIONS, SIZES, familyOf, actionAllowed } = require('./src/catalog');
@@ -8,6 +8,7 @@ const { createImporter } = require('./src/importer');
 const { createDesk } = require('./src/desk');
 const { createVideoGen } = require('./src/videogen');
 const { aiActionList, AI_CORE } = require('./src/aiprompts');
+const { createUpdater, REPO } = require('./src/updater');
 
 const BASE_W = 240;
 const BASE_H = 260;
@@ -27,8 +28,8 @@ let tray;
 let importer;
 let desk;
 let videogen;
-let aiSettingsWin;
-let namesWin;
+let panelWin;
+let updater;
 let settingsPath;
 // userName：主人叫什么；petNames：每只鸟（按鸟种）各自的名字
 let settings = { species: 'roseicollis', mode: 'cartoon', size: 'medium', muted: false, userName: '', petNames: {} };
@@ -39,6 +40,7 @@ function loadSettings() {
     Object.assign(settings, JSON.parse(fs.readFileSync(settingsPath, 'utf8')));
   } catch (_) { /* 第一次运行没有设置文件 */ }
   if (!SPECIES[settings.species]) settings.species = 'roseicollis';
+  if (!settings.firstRun) { settings.firstRun = Date.now(); saveSettings(); }   // 控制面板上"陪了你几天"
 }
 
 function saveSettings() {
@@ -89,6 +91,7 @@ function createWindow() {
     });
     // PET_DEBUG_ACTION=gnaw：启动 4 秒后自动做这个动作
     if (process.env.PET_DEBUG_ACTION) setTimeout(() => send('action', process.env.PET_DEBUG_ACTION), 4000);
+    if (process.env.PET_DEBUG_PANEL) setTimeout(() => openPanel(process.env.PET_DEBUG_PANEL), 2500);
     let n = 0;
     setInterval(async () => {
       if (desk) desk.debugCapture('/tmp/parrot_pet_overlay.png');
@@ -120,29 +123,10 @@ function setSetting(key, value) {
   rebuildTray();
 }
 
+// 右键菜单和托盘菜单只留常用的几项，其余都在控制面板里
 function buildMenuTemplate() {
+  const upd = updater && updater.state().status;
   return [
-    {
-      label: '鸟种',
-      submenu: Object.entries(FAMILIES).map(([fam, f]) => ({
-        label: f.name + (familyOf(settings.species) === fam ? ' ✓' : ''),
-        submenu: Object.entries(SPECIES).filter(([, sp]) => sp.shape === fam).map(([id, sp]) => ({
-          label: sp.name,
-          type: 'radio',
-          checked: settings.species === id,
-          click: () => setSetting('species', id),
-        })),
-      })),
-    },
-    {
-      label: '形象',
-      submenu: MODES.map(m => ({
-        label: m.name,
-        type: 'radio',
-        checked: settings.mode === m.id,
-        click: () => setSetting('mode', m.id),
-      })),
-    },
     {
       label: '做个动作',
       submenu: ACTIONS.filter(a => a.menu && actionAllowed(a.id, familyOf(settings.species))).map(a => ({
@@ -150,42 +134,12 @@ function buildMenuTemplate() {
         click: () => send('action', a.id),
       })),
     },
-    {
-      label: '大小',
-      submenu: SIZES.map(s => ({
-        label: s.name,
-        type: 'radio',
-        checked: settings.size === s.id,
-        click: () => setSetting('size', s.id),
-      })),
-    },
-    { label: '名字（你叫什么、它叫什么）…', click: () => openNames() },
-    ...(['budgie', 'monk', 'cockatoo', 'grey', 'cockatiel'].includes(familyOf(settings.species))
-      ? [{ label: '教它说一句话…', click: () => openTeach() }] : []),
-    { label: '豆豆眼', type: 'checkbox', checked: !!settings.beanEyes, click: (item) => setSetting('beanEyes', item.checked) },
-    { label: '静音', type: 'checkbox', checked: settings.muted, click: (item) => setSetting('muted', item.checked) },
-    { type: 'separator' },
-    {
-      label: 'AI 生成动作',
-      submenu: [
-        { label: '用一张照片生成动作…', enabled: !!videogen && !videogen.busy(), click: () => startAiGenerate() },
-        ...(videogen && videogen.busy()
-          ? [{ label: `生成中 ${videogen.counts().done + videogen.counts().failed}/${videogen.counts().total}（取消还没开始的）`, click: () => { videogen.cancelQueued(); rebuildTray(); } }]
-          : []),
-        { label: '设置（服务、密钥）…', click: () => openAiSettings() },
-      ],
-    },
     { label: '叫它回来', click: () => send('come-back') },
+    { label: '静音', type: 'checkbox', checked: settings.muted, click: (item) => setSetting('muted', item.checked) },
     ...(desk && desk.hasMarks() ? [{ label: '打扫咬痕和纸屑', click: () => desk.onPet('clean') }] : []),
-    {
-      label: '真实素材',
-      submenu: [
-        { label: '打开素材文件夹（把视频、照片丢进来）', click: () => { fs.mkdirSync(REAL_DIR, { recursive: true }); require('electron').shell.openPath(REAL_DIR); } },
-        importer && !importer.ready()
-          ? { label: `下载自动抠图工具（${importer.setupSize}）`, click: () => importer.setup() }
-          : { label: '重新处理全部素材', click: () => importer && importer.reprocessAll() },
-      ],
-    },
+    { type: 'separator' },
+    { label: '控制面板…', click: () => openPanel() },
+    ...(upd === 'available' || upd === 'ready' ? [{ label: '有新版本，去更新…', click: () => openPanel('about') }] : []),
     { type: 'separator' },
     { label: '再见啦（退出）', click: () => app.quit() },
   ];
@@ -193,15 +147,16 @@ function buildMenuTemplate() {
 
 function rebuildTray() {
   if (tray) tray.setContextMenu(Menu.buildFromTemplate(buildMenuTemplate()));
+  pushPanel();
 }
 
 function createTray() {
   const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', IS_MAC ? 'trayTemplate.png' : 'tray.png'));
   if (IS_MAC) icon.setTemplateImage(true);
   tray = new Tray(icon);
-  tray.setToolTip('鹦鹉桌宠（点一下叫它回来）');
+  tray.setToolTip(IS_MAC ? '鹦鹉桌宠' : '鹦鹉桌宠（点一下叫它回来、打开控制面板）');
   // Windows 上左键点托盘图标就叫回来，右键才是菜单（Mac 点一下照常弹菜单）
-  if (!IS_MAC) tray.on('click', () => send('come-back'));
+  if (!IS_MAC) tray.on('click', () => { send('come-back'); openPanel(); });
   rebuildTray();
 }
 
@@ -260,50 +215,63 @@ function watchMusic() {
         if (!m || own.has(+m[1]) || m[2] === 'coreaudiod') continue;
         if (/playing audio|audio|music|media|video|播放/i.test(m[3])) { on = true; break; }
       }
+      if (settings.followMusic === false) on = false;
       if (on !== musicOn) { musicOn = on; send('music', on); }
     });
   }, 6000);
 }
 
-// 教它说话：输入一句话，鸟以后学舌时会说（最多记 20 句）
-let teachWin;
-function openTeach() {
-  if (teachWin && !teachWin.isDestroyed()) { teachWin.show(); teachWin.focus(); return; }
-  teachWin = new BrowserWindow({
-    width: 380, height: 300, title: '教它说话', resizable: false,
-    webPreferences: { preload: path.join(__dirname, 'src', 'names_preload.js'), contextIsolation: true },
+// 控制面板：鸟种、名字、动作、教说话、素材、AI 设置、检查更新都在这一个窗口里
+function openPanel(tab) {
+  if (panelWin && !panelWin.isDestroyed()) {
+    if (tab) panelWin.webContents.send('panel-tab', tab);
+    panelWin.show(); panelWin.focus(); app.focus({ steal: true });
+    return;
+  }
+  panelWin = new BrowserWindow({
+    width: 860, height: 660, minWidth: 760, minHeight: 560, title: '鹦鹉桌宠',
+    show: false, backgroundColor: nativeTheme.shouldUseDarkColors ? '#24231f' : '#fbf9f4',
+    webPreferences: { preload: path.join(__dirname, 'src', 'panel_preload.js'), contextIsolation: true },
   });
-  teachWin.setMenuBarVisibility(false);
-  teachWin.loadFile(path.join(__dirname, 'src', 'teach.html'));
-  app.focus({ steal: true });
+  panelWin.setMenuBarVisibility(false);
+  panelWin.loadFile(path.join(__dirname, 'src', 'panel.html'), { hash: tab || '' });
+  panelWin.once('ready-to-show', () => { panelWin.show(); app.focus({ steal: true }); });
+  // PET_DEBUG：面板打开后存一张截图，渲染进程日志打到终端
+  if (process.env.PET_DEBUG) {
+    panelWin.webContents.on('console-message', (_e, level, message, line, source) => console.log(`[panel:${level}] ${message} (${path.basename(source)}:${line})`));
+    panelWin.webContents.on('did-finish-load', () => setTimeout(async () => {
+      if (!panelWin || panelWin.isDestroyed()) return;
+      fs.writeFileSync('/tmp/parrot_panel.png', (await panelWin.webContents.capturePage()).toPNG());
+    }, 1500));
+  }
 }
 
-function openNames() {
-  if (namesWin && !namesWin.isDestroyed()) { namesWin.show(); namesWin.focus(); return; }
-  namesWin = new BrowserWindow({
-    width: 380, height: 330, title: '名字', resizable: false,
-    webPreferences: { preload: path.join(__dirname, 'src', 'names_preload.js'), contextIsolation: true },
-  });
-  namesWin.setMenuBarVisibility(false);
-  namesWin.loadFile(path.join(__dirname, 'src', 'names.html'));
-  app.focus({ steal: true });
+function panelState() {
+  const learned = settings.learned || [];
+  return {
+    platform: process.platform,
+    version: app.getVersion(),
+    settings: {
+      species: settings.species, mode: settings.mode, size: settings.size, beanEyes: !!settings.beanEyes,
+      muted: !!settings.muted, followMusic: settings.followMusic !== false, autoUpdate: settings.autoUpdate !== false,
+      userName: settings.userName || '', petName: (settings.petNames || {})[settings.species] || '',
+      learned, days: Math.max(1, Math.ceil((Date.now() - (settings.firstRun || Date.now())) / 86400000)),
+    },
+    ai: videogen ? { ...videogen.publicConfig(), busy: videogen.busy(), counts: videogen.counts(), ready: videogen.ready() } : null,
+    importer: importer ? { ready: importer.ready(), busy: importer.busy(), setupSize: importer.setupSize } : null,
+    marks: !!(desk && desk.hasMarks()),
+    update: updater ? updater.state() : { status: 'idle', current: app.getVersion() },
+    canAutoUpdate: !!(updater && updater.canAuto()),
+  };
 }
-
-function openAiSettings() {
-  if (aiSettingsWin && !aiSettingsWin.isDestroyed()) { aiSettingsWin.show(); aiSettingsWin.focus(); return; }
-  aiSettingsWin = new BrowserWindow({
-    width: 560, height: 640, title: 'AI 生成动作 · 设置', resizable: true,
-    webPreferences: { preload: path.join(__dirname, 'src', 'aisettings_preload.js'), contextIsolation: true },
-  });
-  aiSettingsWin.setMenuBarVisibility(false);
-  aiSettingsWin.loadFile(path.join(__dirname, 'src', 'aisettings.html'));
-  app.focus({ steal: true });
+function pushPanel() {
+  if (panelWin && !panelWin.isDestroyed()) panelWin.webContents.send('panel-state', panelState());
 }
 
 async function startAiGenerate() {
   if (!videogen.ready()) {
-    await dialog.showMessageBox({ type: 'info', message: '先填一下生成服务的密钥', detail: '在接下来的设置窗口里选服务、填 API Key，保存后再来。', buttons: ['好'] });
-    return openAiSettings();
+    await dialog.showMessageBox({ type: 'info', message: '先填一下生成服务的密钥', detail: '在控制面板的"设置"里选服务、填 API Key，保存后再来。', buttons: ['好'] });
+    return openPanel('set');
   }
   app.focus({ steal: true });
   const species = settings.species;
@@ -437,6 +405,38 @@ ipcMain.handle('names-save', (_e, v) => {
   return true;
 });
 ipcMain.handle('ai-config-get', () => videogen.publicConfig());
+ipcMain.handle('panel-get', () => panelState());
+const PANEL_KEYS = ['species', 'mode', 'size', 'beanEyes', 'muted', 'followMusic', 'autoUpdate'];
+ipcMain.handle('panel-set', (_e, key, value) => {
+  if (!PANEL_KEYS.includes(key)) return false;
+  if (key === 'species' && !SPECIES[value]) return false;
+  if (key === 'size' && !SIZES.some(s => s.id === value)) return false;
+  if (key === 'mode' && !MODES.some(m => m.id === value)) return false;
+  setSetting(key, value);
+  if (key === 'species') send('names-changed', { userName: settings.userName, petName: (settings.petNames || {})[settings.species] });
+  if (key === 'followMusic' && !value && musicOn) { musicOn = false; send('music', false); }
+  return true;
+});
+ipcMain.handle('panel-cmd', async (_e, cmd, arg) => {
+  const links = { home: `https://github.com/${REPO}`, credits: `https://github.com/${REPO}/blob/main/assets/sounds/CREDITS.md`, issues: `https://github.com/${REPO}/issues` };
+  switch (cmd) {
+    case 'act': if (ACTIONS.some(a => a.id === arg)) send('action', arg); break;
+    case 'come-back': send('come-back'); break;
+    case 'try-say': send('taught', String(arg || '').slice(0, 30)); break;
+    case 'clean': if (desk) desk.onPet('clean'); break;
+    case 'open-folder': fs.mkdirSync(REAL_DIR, { recursive: true }); shell.openPath(REAL_DIR); break;
+    case 'importer-setup': if (importer) importer.setup(); break;
+    case 'reprocess': if (importer) importer.reprocessAll(); break;
+    case 'ai-generate': startAiGenerate(); break;
+    case 'ai-cancel': if (videogen) videogen.cancelQueued(); break;
+    case 'update-check': await updater.check(); break;
+    case 'update-download': updater.download(); break;
+    case 'update-install': updater.install(); break;
+    case 'link': if (links[arg]) shell.openExternal(links[arg]); break;
+  }
+  rebuildTray();
+  return panelState();
+});
 ipcMain.handle('ai-config-save', (_e, cfg) => { videogen.saveConfig(cfg); rebuildTray(); return true; });
 // 自定义声音：素材文件夹 sounds/<名字>.mp3 等，存在就返回 file:// 地址
 ipcMain.handle('custom-sound', (_e, name) => {
@@ -463,7 +463,7 @@ ipcMain.on('context-menu', () => {
 // 只开一只鸟：再双击一次桌面/开始菜单里的图标，就把跑丢的鸟叫回到鼠标所在的屏幕
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
-app.on('second-instance', () => send('come-back'));
+app.on('second-instance', () => { send('come-back'); openPanel(); });
 
 app.whenReady().then(() => {
   if (!gotLock) return;
@@ -490,6 +490,20 @@ app.whenReady().then(() => {
   });
   win.webContents.once('did-finish-load', () => importer.start());
   createTray();
+  let toldVersion = null;
+  updater = createUpdater({ notify: (st) => {
+    rebuildTray();
+    if (st.status === 'available' && toldVersion !== st.version) { toldVersion = st.version; send('update-available', st.version); }
+  } });
+  // 每天自动看一次有没有新版本（启动后 30 秒，之后每 6 小时看一下距上次是否满一天）
+  const autoCheck = () => {
+    if (settings.autoUpdate === false || !app.isPackaged) return;
+    if (Date.now() - (settings.lastUpdateCheck || 0) < 20 * 3600 * 1000) return;
+    settings.lastUpdateCheck = Date.now(); saveSettings();
+    updater.check();
+  };
+  setTimeout(autoCheck, 30 * 1000);
+  setInterval(autoCheck, 6 * 3600 * 1000);
   // 换显示器、改分辨率时让鸟重新找地面
   screen.on('display-metrics-changed', () => send('come-back'));
   screen.on('display-removed', () => send('come-back'));

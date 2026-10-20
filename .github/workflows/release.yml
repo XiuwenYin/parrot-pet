@@ -53,12 +53,17 @@ jobs:
             dist/*.dmg
             dist/*.zip
             dist/*.exe
+            dist/*.blockmap
+            dist/latest*.yml
 
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: out
@@ -83,6 +88,10 @@ jobs:
 
           鸟找不到了：再双击一次桌面上的「鹦鹉桌宠」图标，它会回到鼠标所在的屏幕；Windows 上左键点托盘图标也能叫它回来。
           NOTES
+          # 更新内容：上一个版本以来的提交说明（控制面板"关于与更新"里会显示前几条）
+          PREV=$(git describe --tags --abbrev=0 "${{ github.ref_name }}^" 2>/dev/null || true)
+          { echo "更新内容："; git log --no-merges --format='- %s' ${PREV:+$PREV..}"${{ github.ref_name }}" | grep -v -E '^- v[0-9]' | head -8; echo; cat notes.md; } > notes_full.md
+          mv notes_full.md notes.md
           gh release create "${{ github.ref_name }}" out/* \
             --repo "${{ github.repository }}" \
             --title "鹦鹉桌宠 ${{ github.ref_name }}" \

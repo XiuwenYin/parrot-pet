@@ -1024,6 +1024,8 @@
       if (arg.errors && arg.errors.length) lines.push(arg.errors.join('；').slice(0, 60));
       if (arg.done) lines.push('正在自动抠图导入…');
       say(lines.join('\n'), 8000);
+    } else if (cmd === 'update-available') {
+      say(`有新版本 v${arg} 啦！右键我 → 控制面板 → 关于与更新`, 6000);
     } else if (cmd === 'come-back') {
       // 回到鼠标所在的屏幕，从鼠标上方掉下来
       env = await api.getEnv({ toCursor: true });

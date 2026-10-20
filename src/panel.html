@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:">
+  <title>鹦鹉桌宠</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <div class="main">
+    <nav class="side">
+      <div class="me"><div class="ava" id="ava"></div><div><b id="meName"></b><small id="meSub"></small></div></div>
+      <a class="nav" data-tab="bird"><svg viewBox="0 0 24 24"><path d="M5 19c2-6 6-10 13-11-1 4-3 6-6 7l-3 4z"/></svg>我的鸟</a>
+      <a class="nav" data-tab="play"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg>互动</a>
+      <a class="nav" data-tab="media"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-5 5 5 3-3 5 5"/></svg>素材</a>
+      <a class="nav" data-tab="set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>设置</a>
+      <a class="nav" data-tab="about"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>关于与更新<span class="dot" id="updDot" hidden></span></a>
+      <div class="grow"></div>
+      <button class="call" id="comeBack">叫它回来</button>
+      <div class="ver" id="ver"></div>
+    </nav>
+
+    <!-- 我的鸟 -->
+    <section class="content" id="bird">
+      <h2>我的鸟</h2>
+      <p class="sub">换个鸟种、改个名字，桌面上那只马上跟着变</p>
+      <div class="hero">
+        <div class="stage"><span class="tag">预览</span><div id="preview"></div></div>
+        <div class="card form">
+          <div class="row"><label for="userName">你叫什么</label><input class="t" id="userName" maxlength="12" placeholder="比如：小文"></div>
+          <div class="row"><label for="petName">它叫什么</label><input class="t" id="petName" maxlength="12" placeholder="给它起个名字"></div>
+          <div class="row"><label>形象</label><div class="seg" id="modeSeg"></div></div>
+          <div class="row"><label>大小</label><div class="seg" id="sizeSeg"></div></div>
+          <div class="row"><label>豆豆眼</label><button class="sw" id="beanEyes" role="switch"></button></div>
+        </div>
+      </div>
+      <div class="card species" id="speciesBox"></div>
+    </section>
+
+    <!-- 互动 -->
+    <section class="content" id="play">
+      <h2>互动</h2>
+      <p class="sub">点一下，它马上做；绿色的是这个鸟种才会的</p>
+      <div class="card"><h3>做个动作</h3><div class="acts" id="acts"></div></div>
+      <div class="card" id="teachCard">
+        <h3>教它说话</h3>
+        <div class="phr" id="phrases"></div>
+        <div class="row plain"><input class="t" id="teachInput" maxlength="30" placeholder="输入一句话，它会时不时学一遍"><button class="btn primary" id="teachBtn">教它</button><button class="btn" id="tryBtn">试听</button></div>
+      </div>
+      <div class="card" id="noTalk" hidden><h3>教它说话</h3><p class="hint" id="noTalkText"></p></div>
+      <div class="card">
+        <div class="row"><label>静音</label><button class="sw" id="muted" role="switch"></button></div>
+        <div class="row" id="musicRow"><label>跟着音乐</label><button class="sw" id="followMusic" role="switch"></button></div>
+      </div>
+    </section>
+
+    <!-- 素材 -->
+    <section class="content" id="media">
+      <h2>素材</h2>
+      <p class="sub">用你自己那只鸟的视频、照片，做出真实形象</p>
+      <div class="card">
+        <h3>真实素材</h3>
+        <p class="hint">把视频、照片丢进素材文件夹，会自动认出鸟、抠图，变成它的各种动作。只在这台电脑上处理，不会上传。</p>
+        <div class="row plain"><span id="importerStatus" class="hint"></span><span class="grow"></span><button class="btn" id="openFolder">打开素材文件夹</button><button class="btn primary" id="importerBtn"></button></div>
+      </div>
+      <div class="card">
+        <h3>AI 生成动作</h3>
+        <p class="hint">用一张鸟的照片，让 AI 生成它做各种动作的短视频，再自动抠图导入。需要先在"设置"里填生成服务的密钥。</p>
+        <div class="row plain"><span id="aiStatus" class="hint"></span><span class="grow"></span><button class="btn" id="aiCancel" hidden>取消还没开始的</button><button class="btn primary" id="aiGenerate">用一张照片生成…</button></div>
+      </div>
+      <div class="card" id="marksCard" hidden>
+        <div class="row plain"><span class="hint">桌面上还留着它啃出来的咬痕和纸屑</span><span class="grow"></span><button class="btn" id="clean">打扫干净</button></div>
+      </div>
+    </section>
+
+    <!-- 设置 -->
+    <section class="content" id="set">
+      <h2>设置</h2>
+      <p class="sub">AI 生成动作用的服务和密钥，只保存在这台电脑上</p>
+      <div class="card">
+        <div class="row"><label for="provider">生成服务</label><select class="t" id="provider"></select></div>
+      </div>
+      <div class="card ai" data-provider="bailian">
+        <h3>阿里云百炼（通义万相）</h3>
+        <div class="row"><label>接口地址</label><input class="t" id="bailian_host" placeholder="https://dashscope.aliyuncs.com"></div>
+        <div class="row"><label>API Key</label><input class="t" id="bailian_apiKey" type="password" autocomplete="off"></div>
+        <div class="row"><label>模型</label><select class="t" id="bailian_model">
+          <option value="wan2.6-i2v-flash">wan2.6-i2v-flash（快，推荐）</option>
+          <option value="wan2.6-i2v">wan2.6-i2v</option>
+          <option value="wan2.5-i2v-preview">wan2.5-i2v-preview</option>
+          <option value="wan2.2-i2v-flash">wan2.2-i2v-flash</option>
+          <option value="wan2.2-i2v-plus">wan2.2-i2v-plus</option>
+        </select></div>
+        <div class="row"><label>清晰度</label><select class="t" id="bailian_resolution"><option>480P</option><option>720P</option><option>1080P</option></select></div>
+        <div class="row"><label>单价</label><input class="t" id="bailian_pricePerSecond" type="number" step="0.01" min="0"><span class="hint">元/秒，估算费用用</span></div>
+      </div>
+      <div class="card ai" data-provider="dishui">
+        <h3>滴水模型中心</h3>
+        <div class="row"><label>接口地址</label><input class="t" id="dishui_baseUrl"></div>
+        <div class="row"><label>API Key</label><input class="t" id="dishui_apiKey" type="password" autocomplete="off"></div>
+        <div class="row"><label>模型</label><input class="t" id="dishui_model" placeholder="seedance-2.0-fast"></div>
+        <div class="row"><label>单价</label><input class="t" id="dishui_pricePerSecond" type="number" step="0.01" min="0"><span class="hint">元/秒，估算费用用</span></div>
+      </div>
+      <div class="bar"><span class="hint" id="aiMsg"></span><button class="btn primary" id="aiSave">保存</button></div>
+    </section>
+
+    <!-- 关于与更新 -->
+    <section class="content" id="about">
+      <h2>关于与更新</h2>
+      <div class="card" id="updCard"></div>
+      <div class="card"><div class="row plain"><label>自动检查</label><button class="sw" id="autoUpdate" role="switch"></button></div></div>
+      <div class="card aboutCard">
+        <div id="aboutBird"></div>
+        <div>
+          <b class="big">鹦鹉桌宠</b><div class="hint">作者 XiuwenYin</div>
+          <div class="links"><a data-link="home">项目主页</a><a data-link="credits">叫声出处</a><a data-link="issues">反馈问题</a></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="catalog.js"></script>
+  <script src="actions.js"></script>
+  <script src="parrot.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>
