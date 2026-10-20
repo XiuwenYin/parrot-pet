@@ -12,7 +12,6 @@
 | `cockatiel/call*.wav` | [Nymphicus hollandicus call.ogg](https://commons.wikimedia.org/wiki/File:Nymphicus_hollandicus_call.ogg) | ZooFari | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
 | `monk/call*.wav` | [Monk parakeet and European serin](https://freesound.org/s/853101/) | ana.conser | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `cockatoo/screech*.wav` | [Sulphur Crested Cockatoo](https://freesound.org/s/783046/) | jacques.devosmalan | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| `cockatoo/wild*.wav` | [Sonus naturalis - Soundscape XC448843](https://commons.wikimedia.org/wiki/File:Sonus_naturalis_-_Soundscape_XC448843.mp3)（约 1 分 15 秒处的葵花凤头） | James Ray | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
 | `grey/noise*.wav` | [Psittacus erithacus making some noise.ogg](https://commons.wikimedia.org/wiki/File:Psittacus_erithacus_making_some_noise.ogg) | Amada44 | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) |
 
 凯克鹦鹉没找到可以用的开放录音，用的是和尚鹦鹉的叫声调高音调，加上合成的哨音。

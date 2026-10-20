@@ -179,10 +179,10 @@ const Sound = (() => {
     setMuted(m) { muted = m; },
     setVoice(v) { voice = voices[v] ? v : 'lovebird'; },
     setBank(b) { bank = b || {}; },
-    // 叫一声：有真实录音的鸟大多用录音（凯克借和尚的），偶尔混一下合成音
+    // 叫一声：有真实录音的鸟都用录音（凯克借和尚的）；合成音比录音小声很多，混着放会忽大忽小
     chirp(n = 2) {
       if (muted) return;
-      if ((bank[voice] || BORROW[voice]) && Math.random() < 0.8) {
+      if (bank[voice] || (BORROW[voice] && bank[BORROW[voice][0]])) {
         let t = 0;
         for (let i = 0; i < Math.min(n, 2); i++) { setTimeout(() => sample(voice), t * 1000); t += 0.32; }
         return;
@@ -193,7 +193,7 @@ const Sound = (() => {
     song() {
       if (muted) return;
       // 唱歌：几段录音接起来（虎皮用长一点的 song 段）
-      if ((bank[voice] || BORROW[voice]) && Math.random() < 0.7) {
+      if (bank[voice] || (BORROW[voice] && bank[BORROW[voice][0]])) {
         const k = 2 + Math.floor(Math.random() * 3);
         for (let i = 0; i < k; i++) setTimeout(() => sample(voice, 1, 0.45, voice === 'budgie' && i % 2 ? 'song' : null), i * 380);
         return;
@@ -225,8 +225,8 @@ const Sound = (() => {
     scream(dur = 1.2) {
       if (muted) return;
       if (bank.cockatoo && bank.cockatoo.length) {       // 用真凤头的尖叫
-        sample('cockatoo', 1, 0.6);
-        if (dur > 0.9) setTimeout(() => sample('cockatoo', 0.95, 0.6), 520);
+        sample('cockatoo', 1, 0.6, 'screech');
+        if (dur > 0.9) setTimeout(() => sample('cockatoo', 0.95, 0.6, 'screech'), 520);
         return;
       }
       const now = ac().currentTime;
@@ -299,6 +299,10 @@ const Sound = (() => {
     // 生气的尖叫（和尚更粗）
     squawk() {
       if (muted) return;
+      if (bank[voice] || (BORROW[voice] && bank[BORROW[voice][0]])) {     // 有录音就用录音，调快一点更像炸毛
+        sample(voice, 1.12, 0.6, voice === 'cockatoo' ? 'screech' : null);
+        return;
+      }
       const now = ac().currentTime;
       if (voice === 'monk') {
         syllable(now, 0.2, 520, 1600, 0.16);

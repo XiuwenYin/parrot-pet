@@ -32,6 +32,7 @@
   let family = 'lovebird';
   let traits = FAMILIES.lovebird;
   let hopT = 1;           // 点击时的小跳
+  let crestPop = 0;       // 凤头被点一下，冠羽"唰"地炸开一会儿
   const CLIMB_LEAN = 20;  // 爬墙时身子往后仰的角度
   Sound.setTts(api.tts);
   if (api.soundBank) api.soundBank().then(b => Sound.setBank(b)).catch(() => {});
@@ -74,7 +75,7 @@
     const sp = SPECIES[settings.species] || SPECIES.roseicollis;
     family = sp.shape;
     traits = FAMILIES[family] || FAMILIES.lovebird;
-    svg.innerHTML = parrotSVG(family, sp.palette);
+    svg.innerHTML = parrotSVG(family, { ...sp.palette, beanEyes: !!settings.beanEyes });
     Sound.setVoice(traits.voice);
     gnawTip = null;
     applyCartoon = makeCartoon(svg, family);
@@ -951,6 +952,7 @@
     Sound.chirp(2);
     say(pickOne(lines('click')), 1600);
     hopT = 0;
+    if (family === 'cockatoo') crestPop = 1.6;
   }
 
   // ---------- 菜单命令 ----------
@@ -1076,8 +1078,9 @@
     POSES[cur.id](cur.t, cur.s, p);
     p.tailPaper = family === 'lovebird' ? Math.max(p.tailPaper, tailPaper) : 0;
     p.twigPile = family === 'monk' && onGround() && !['fly', 'flutter', 'gnaw'].includes(cur.id) ? twigPile : 0;
-    if (family !== 'cockatiel') p.crest = 0;
+    if (family !== 'cockatiel' && family !== 'cockatoo') p.crest = 0;   // 只有玄凤和凤头有冠羽
     if (hopT < 0.3) { hopT += dt; p.y += -Math.sin((hopT / 0.3) * Math.PI) * 10; }
+    if (crestPop > 0) { crestPop = Math.max(0, crestPop - dt); p.crest = Math.max(p.crest || 0, Math.min(1, crestPop / 0.35)); }
 
     // 1) 换动作的过渡：从上一帧的姿势缓入缓出到新动作
     let q = p;

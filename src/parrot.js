@@ -56,6 +56,8 @@ function shapeOf(shapeId, neckStyle) {
 
 function parrotSVG(shapeId, p) {
   const NS = p.neckStyle !== false;   // 默认都用一颗豆子的画法；neckStyle:false 回到旧画法
+  // 豆豆眼：一颗小黑豆，没有高光；浅色虹膜的（非洲灰）用瞳孔色
+  const BEAN = !!p.beanEyes, bean = p.pupil || p.eye;
   const S = shapeOf(shapeId, NS);
   const B = S.body;
   const line = (c) => `stroke="${shade(c, -0.38)}" stroke-opacity="0.45" stroke-width="1.3"`;
@@ -116,17 +118,24 @@ function parrotSVG(shapeId, p) {
 
   // 冠羽（玄凤）：三根弯羽毛，转轴在头顶，crest 参数决定竖起多少
   // 葵花凤头的冠：五根宽羽，从头顶长出、尖端往前卷；放下时贴在后脑，只露出翘起的黄尖
-  const cockatooFeathers = (front) => [0, 1, 2, 3, 4].map((i) => {
+  const cockatooFeathers = (front) => {
     const c = p.crest || '#F5D24A';
-    if (front) {
-      const a = (i - 2) * 16, bx = 114 + (i - 2) * 5, by = 44, h = 40 - Math.abs(i - 2) * 6;
-      return `<path d="M${bx - 5},${by} C${bx - 7},${by - h * 0.6} ${bx - 2},${by - h} ${bx + 4},${by - h - 2} C${bx + 2},${by - h * 0.6} ${bx + 5},${by - h * 0.3} ${bx + 5},${by} Z"
+    if (front) return [0, 1, 2, 3, 4, 5, 6].map((i) => {
+      const a = (i - 3) * 17, bx = 114 + (i - 3) * 4, by = 44, h = 54 - Math.abs(i - 3) * 6;
+      return `<path d="M${bx - 6},${by} C${bx - 8},${by - h * 0.6} ${bx - 3},${by - h} ${bx + 4},${by - h - 2} C${bx + 3},${by - h * 0.6} ${bx + 6},${by - h * 0.3} ${bx + 6},${by} Z"
         transform="rotate(${a} ${bx} ${by})" fill="${shade(c, (i % 2) * 0.08)}" ${line(c)}/>`;
-    }
-    const bx = 104 + i * 5, by = 47 - i * 0.6, h = 46 - i * 5;
-    return `<path d="M${bx - 5},${by} C${bx - 14},${by - h * 0.55} ${bx - 8},${by - h * 1.02} ${bx + 14},${by - h * 0.9} C${bx + 4},${by - h * 0.8} ${bx + 2},${by - h * 0.45} ${bx + 6},${by} Z"
-      fill="${shade(c, (i % 2) * 0.08 - 0.03 * i)}" ${line(c)}/>`;
-  }).join('');
+    }).join('');
+    // 侧面：七根宽羽从头顶一圈长出来，像一把撑开的扇子，尖端都往前卷；后面的先画
+    return [0, 1, 2, 3, 4, 5, 6].map((i) => {
+      const th = (-38 + i * 10) * Math.PI / 180;               // 在头顶的位置（负的靠后脑）
+      const bx = 114 + 31 * Math.sin(th), by = 74 - 31 * Math.cos(th);
+      const a = -50 + i * 13, L = 50 + 10 * Math.sin(Math.PI * i / 6), w = 15;
+      return `<g transform="translate(${bx.toFixed(1)} ${by.toFixed(1)}) rotate(${a})">
+        <path d="M${-w / 2},4 C${-w * 0.8},${-L * 0.45} ${-w * 0.45},${-L * 0.92} ${w * 0.45},${-L} C${w * 0.75},${-L * 0.7} ${w * 0.6},${-L * 0.3} ${w / 2},4 Z"
+          fill="${shade(c, (i % 2) * 0.07 - 0.02 * (6 - i))}" ${line(c)}/>
+        <path d="M0,0 C${-w * 0.15},${-L * 0.5} ${w * 0.05},${-L * 0.8} ${w * 0.35},${-L * 0.95}" stroke="${shade(c, 0.3)}" stroke-width="1.1" fill="none" opacity="0.8"/></g>`;
+    }).join('');
+  };
   // 平时：一根"蒜苗"——几根冠羽并成一束，从额头往后上方翘着；激动时才炸开成扇形
   const cc = p.crest || '#F5D24A';
   const crestSide = S.crest === 'cockatoo' ? `<g id="crest">
@@ -435,10 +444,11 @@ function parrotSVG(shapeId, p) {
     <ellipse id="blush" cx="135" cy="89" rx="9" ry="5.5" fill="${cheek}" opacity="0.3" filter="url(#soft1)"/>
     <g id="eye">
       ${ring}
+      ${BEAN ? `<ellipse cx="128.4" cy="70.2" rx="3.5" ry="4.2" fill="${bean}"/>` : `
       <ellipse cx="128" cy="70" rx="5.6" ry="6.3" fill="${p.eye}"/>
       ${p.pupil ? `<circle cx="128.6" cy="70.4" r="2.9" fill="${p.pupil}"/>` : ''}
       <circle cx="130.2" cy="67.2" r="2.3" fill="#fff"/>
-      <circle cx="126.4" cy="72.6" r="1" fill="#fff" opacity="0.8"/>
+      <circle cx="126.4" cy="72.6" r="1" fill="#fff" opacity="0.8"/>`}
     </g>
     <path id="eyeHappy" d="M121.5,72 Q128,64 134.5,72" stroke="${p.eye}" stroke-width="2.8" fill="none" stroke-linecap="round"/>
     <path id="eyeX" d="M123.5,65.5 L132.5,74.5 M132.5,65.5 L123.5,74.5" stroke="${p.eye}" stroke-width="2.4" stroke-linecap="round"/>
@@ -471,13 +481,14 @@ function parrotSVG(shapeId, p) {
     <ellipse cx="136" cy="90" rx="8" ry="5" fill="${cheek}" opacity="0.32" filter="url(#soft1)"/>
     <g id="eyesFront">
       ${p.eyeRing ? `<circle cx="99" cy="71" r="8.5" fill="${p.eyeRing}"/><circle cx="129" cy="71" r="8.5" fill="${p.eyeRing}"/>` : ''}
+      ${BEAN ? `<ellipse cx="99" cy="71" rx="3.4" ry="4.1" fill="${bean}"/><ellipse cx="129" cy="71" rx="3.4" ry="4.1" fill="${bean}"/>` : `
       <ellipse cx="99" cy="71" rx="5.4" ry="6.1" fill="${p.eye}"/>
       <ellipse cx="129" cy="71" rx="5.4" ry="6.1" fill="${p.eye}"/>
       ${p.pupil ? `<circle cx="99" cy="71.4" r="2.8" fill="${p.pupil}"/><circle cx="129" cy="71.4" r="2.8" fill="${p.pupil}"/>` : ''}
       <circle cx="101" cy="68.2" r="2.2" fill="#fff"/>
       <circle cx="131" cy="68.2" r="2.2" fill="#fff"/>
       <circle cx="97.4" cy="73.6" r="0.9" fill="#fff" opacity="0.8"/>
-      <circle cx="127.4" cy="73.6" r="0.9" fill="#fff" opacity="0.8"/>
+      <circle cx="127.4" cy="73.6" r="0.9" fill="#fff" opacity="0.8"/>`}
     </g>
     ${cereFront}
     <g transform="translate(114 ${80 + S.beak.dy}) scale(${S.beak.s}) translate(-114 -80)">
@@ -662,9 +673,9 @@ function makeCartoon(svg, shapeId) {
       const fan = Math.max(0, Math.min(1, (c - 0.9) / 0.1));
       show(els.crestRest, fan < 0.15); show(els.crestRestFront, fan < 0.15);
       show(els.crestFan, fan >= 0.15); show(els.crestFanFront, fan >= 0.15);
-      els.crestFan.setAttribute('transform', `rotate(${-60 + 95 * fan} ${P.crest[0]} ${P.crest[1] + 4})`);   // 炸开时往前倾，罩到头顶前面
+      els.crestFan.setAttribute('transform', `translate(114 46) rotate(${-35 * (1 - fan)}) scale(${0.45 + 0.55 * fan}) translate(-114 -46)`);   // 从后脑那束一下子撑开成扇
       els.crestRest.setAttribute('transform', `rotate(${-4 + 6 * Math.min(1, c / 0.6)} 110 50)`);
-      if (els.crestFanFront) els.crestFanFront.setAttribute('transform', `translate(114 44) scale(${0.4 + 0.6 * fan}) translate(-114 -44)`);
+      if (els.crestFanFront) els.crestFanFront.setAttribute('transform', `translate(114 44) scale(${0.45 + 0.55 * fan}) translate(-114 -44)`);
     } else if (els.crest) els.crest.setAttribute('transform', `rotate(${-62 + 66 * c} ${P.crest[0]} ${P.crest[1]})`);
     if (els.crestFront && SH.crest !== 'cockatoo') els.crestFront.setAttribute('transform', `translate(114 44) scale(1 ${0.35 + 0.65 * c}) translate(-114 -44)`);
     // 腮红常驻淡淡一层，开心时更红

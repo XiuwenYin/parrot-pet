@@ -162,6 +162,7 @@ function buildMenuTemplate() {
     { label: '名字（你叫什么、它叫什么）…', click: () => openNames() },
     ...(['budgie', 'monk', 'cockatoo', 'grey', 'cockatiel'].includes(familyOf(settings.species))
       ? [{ label: '教它说一句话…', click: () => openTeach() }] : []),
+    { label: '豆豆眼', type: 'checkbox', checked: !!settings.beanEyes, click: (item) => setSetting('beanEyes', item.checked) },
     { label: '静音', type: 'checkbox', checked: settings.muted, click: (item) => setSetting('muted', item.checked) },
     { type: 'separator' },
     {
@@ -354,15 +355,18 @@ ipcMain.handle('get-env', () => {
 ipcMain.handle('get-settings', () => settings);
 // 真实鹦鹉叫声（assets/sounds/<家族>/*.wav，出处见 CREDITS.md）：{ 家族: [file:// 地址, ...] }
 ipcMain.handle('sound-bank', () => {
-  const root = path.join(__dirname, 'assets', 'sounds');
+  // 素材文件夹里 sounds/<家族>/ 下自己放的录音（只在本机，不进仓库）优先，有的话整个替换掉自带的
   const bank = {};
-  try {
-    for (const fam of fs.readdirSync(root)) {
-      const dir = path.join(root, fam);
-      if (!fs.statSync(dir).isDirectory()) continue;
-      bank[fam] = fs.readdirSync(dir).filter(f => /\.(wav|mp3|ogg)$/i.test(f)).map(f => 'file://' + path.join(dir, f));
-    }
-  } catch (_) {}
+  for (const root of [path.join(__dirname, 'assets', 'sounds'), path.join(REAL_DIR, 'sounds')]) {
+    try {
+      for (const fam of fs.readdirSync(root)) {
+        const dir = path.join(root, fam);
+        if (!fs.statSync(dir).isDirectory()) continue;
+        const list = fs.readdirSync(dir).filter(f => /\.(wav|mp3|m4a|ogg)$/i.test(f)).map(f => 'file://' + path.join(dir, f));
+        if (list.length) bank[fam] = list;
+      }
+    } catch (_) {}
+  }
   return bank;
 });
 ipcMain.handle('names-get', () => ({
