@@ -6,7 +6,8 @@
 //       locate <图片>                    → {"box":[x,y,w,h],"score":0.9}   多尺度滑窗找最像鸟的区域
 //       score <图片> [x y w h]           → {"score":0.9,"label":"parrot"}  整张图或某块区域像不像鸟
 //   birdcut image <图片> <输出.png>
-//   birdcut video <视频> <输出目录> [fps=12] [开始秒=0] [结束秒=末尾]
+//   birdcut video <视频> <输出目录> [fps=12] [开始秒=0] [结束秒=末尾] [full]
+//       最后加 full：每帧直接整帧抠主体（纯色背景的视频，比如 AI 生成的，用这个最稳）
 // 每张图在 stdout 打一行 JSON：{"file":..., "ok":true, "bird":0.93, "label":"parrot", "bbox":[x,y,w,h], "edge":false}
 // 输出 PNG 是原图大小、背景透明（裁剪和对齐交给 cutout.py）。
 //
@@ -283,6 +284,7 @@ if args[1] == "image" {
     gen.requestedTimeToleranceAfter = .zero
     var i = 0
     var t = start
+    let fullFrame = args.count > 7 && args[7] == "full"
     var track: CGRect? = nil      // 上一帧鸟的位置
     var lastLocate = -99.0
     while t < end {
@@ -290,12 +292,14 @@ if args[1] == "image" {
             let file = String(format: "%@/%05d.png", outDir, i)
             // 跟着上一帧的位置抠；每 2 秒或者跟丢了就重新定位
             var c: Cut
-            if let tr = track, t - lastLocate < 2 {
+            if fullFrame {
+                c = cutBird(cg, roi: CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
+            } else if let tr = track, t - lastLocate < 2 {
                 c = cutWithRetry(cg, roi: expand(tr, 0.15, in: cg.width, cg.height), maxSteps: 3)
             } else {
                 c = Cut(png: nil, info: ["ok": false])
             }
-            if (c.info["ok"] as? Bool) != true || ((c.info["bird"] as? Double) ?? 0) < 0.2 {
+            if !fullFrame && ((c.info["ok"] as? Bool) != true || ((c.info["bird"] as? Double) ?? 0) < 0.2) {
                 let (loc, _) = locateBird(cg)
                 lastLocate = t
                 c = cutWithRetry(cg, roi: loc)

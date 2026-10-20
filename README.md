@@ -100,6 +100,22 @@ GitHub 会自动在 Mac 和 Windows 上打包，安装包出现在 Releases 页�
 处理记录在 `assets/real/.imported.json`，原文件不会被改动。想全部重来：右键 → 真实素材 → 重新处理全部素材。
 手动导入也可以：`~/Library/Application\ Support/parrot-pet/venv/bin/python tools/import_media.py 视频.mp4 --species roseicollis`
 
+## AI 生成动作
+
+只有一张鸟的照片也能做出会动的真实形象：右键 → AI 生成动作 → 用一张照片生成动作…
+
+1. 第一次用先在「设置（服务、密钥）」里选生成服务、填 API Key（只存在本机用户目录的 `videogen.json`，不进代码仓库）。
+2. 选一张照片后，会先把鸟抠出来放到纯色背景上（照片里的人和背景不会发出去），再按动作生成 5 秒的短视频。
+3. 生成前会弹窗说明要生成几段、大概多少钱；可以选「全部」或「只生成核心 4 段」（发呆、理毛、吃东西、睡觉）。
+4. 生成好的视频存成 `<鸟种>/<动作>.ai-<时间>.mp4`，自动抠图导入到对应动作。
+
+目前支持的服务：
+- **阿里云百炼（通义万相图生视频）**：默认 `wan2.6-i2v-flash`、720P、无声，官方价约 0.15 元/秒，一段 5 秒约 0.75 元。
+- **滴水模型中心**：已预留，等视频接口文档接入。
+
+提示词在 `src/aiprompts.js`，每个动作一句，各鸟种的习性动作单独写；生成队列在 `src/videogen.js`。
+手动丢进素材文件夹的视频，文件名里带动作名（如 `理毛.mp4`、`吃瓜子.mov`、`玄凤国歌.mp4`）也会自动归到对应动作。
+
 ## 开发
 
 - `src/poses.html`：把所有动作的姿态排成一张表，调形状用（`python3 -m http.server -d src` 后打开）。
@@ -117,5 +133,7 @@ src/pet.js         状态机、物理（重力、反弹）、鼠标交互
 src/real.js        真实形象播放器
 src/sound.js       WebAudio 合成叫声
 tools/             抽帧、找鸟（birdcut.swift）、抠鸟（birdseg.py）、导入（import_media.py）、一键安装（setup.sh）
-src/importer.js    盯素材文件夹、排队自动导入
+src/importer.js    盯素材文件夹、排队自动导入（按文件名认动作）
+src/videogen.js    AI 生成动作：照片预处理、提交生成、轮询、下载
+src/aiprompts.js   AI 生成用的各动作提示词
 ```

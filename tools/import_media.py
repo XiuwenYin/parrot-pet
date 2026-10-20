@@ -91,7 +91,7 @@ def crop_cut(rgb, mask, bb, pad=0.06):
     return im, (x0, y0)
 
 
-def import_photo(path, species, out_root, tmp, sam, loc):
+def import_photo(path, species, out_root, tmp, sam, loc, action=None):
     emit(progress=0.1, stage='找鸟')
     rgb = np.asarray(Image.open(path).convert('RGB'))
     if max(rgb.shape[:2]) > 1600:
@@ -112,7 +112,7 @@ def import_photo(path, species, out_root, tmp, sam, loc):
     anchor = (bb[0] + bb[2] / 2 - x0, bb[1] + bb[3] - y0)
     facing = 'right' if facing_of(r['mask']) >= 0 else 'left'
     name = Path(path).stem[:24]
-    out = out_root / species / 'idle' / f'photo_{name}'
+    out = out_root / species / (action or 'idle') / f'photo_{name}'
     save_clip([(im, anchor)], out, 1, facing, Path(path).name, r['score'])
     notes = []
     if bs.edge_touch(bb, rgb.shape[1], rgb.shape[0]):
@@ -123,11 +123,42 @@ def import_photo(path, species, out_root, tmp, sam, loc):
     emit(done=True, clips=[str(out.relative_to(out_root))], message='照片学会啦', hint='；'.join(notes) or None)
 
 
-def extract_frames(path, fps, tmp):
+def extract_frames(path, fps, tmp, start=None, end=None, sub='frames'):
     binp = Path(__file__).resolve().parent / '.bin' / 'extract_frames'
-    d = Path(tmp) / 'frames'
-    subprocess.run([str(binp), str(path), str(d), str(fps)], check=True, stdout=subprocess.DEVNULL)
+    d = Path(tmp) / sub
+    args = [str(binp), str(path), str(d), str(fps)]
+    if start is not None:
+        args += [str(start), str(end)]
+    subprocess.run(args, check=True, stdout=subprocess.DEVNULL)
     return sorted(d.glob('*.png'))
+
+
+LONG_VIDEO_S = 40      # 超过这个长度先粗扫
+WINDOW_S = 6           # 粗扫后每段精细处理的长度
+MAX_WINDOWS = 3
+
+
+def coarse_windows(path, dur, tmp, loc):
+    """长视频：先每隔几秒看一眼（只做分类，很快），挑出鸟最清楚的几个时刻，返回要精细处理的时间段。"""
+    cfps = max(0.2, min(1.0, 150 / dur))
+    emit(progress=0.02, stage='长视频，先快速浏览')
+    files = extract_frames(path, cfps, tmp, sub='coarse')
+    cands = []
+    for i, f in enumerate(files):
+        if i % 5 == 0:
+            emit(progress=round(0.02 + 0.3 * i / max(1, len(files)), 3), stage=f'快速浏览 {i}/{len(files)}')
+        box, sc = loc.locate(str(f))
+        h = np.asarray(Image.open(f)).shape[0]
+        if box and sc >= 0.45 and box[3] >= 0.15 * h:
+            cands.append((sc, i / cfps))
+    cands.sort(reverse=True)
+    chosen = []
+    for sc, t in cands:
+        if all(abs(t - c) > WINDOW_S for c in chosen):
+            chosen.append(t)
+        if len(chosen) >= MAX_WINDOWS:
+            break
+    return [(max(0, t - WINDOW_S / 2), min(dur, t + WINDOW_S / 2)) for t in sorted(chosen)]
 
 
 def video_duration(path):
@@ -140,20 +171,15 @@ def video_duration(path):
         return 0.0
 
 
-def import_video(path, species, out_root, tmp, sam, loc):
-    dur = video_duration(path) or 60
-    fps = min(8.0, max(3.0, 600 / dur))      # 长视频降低帧率，控制总处理量
-    emit(progress=0.02, stage='抽帧')
-    files = extract_frames(path, fps, tmp)
-    if not files:
-        return emit(done=True, clips=[], error='视频读不出来')
+def track_frames(files, fps, tmp, sam, loc, p0, p1):
+    """逐帧跟踪抠鸟，返回每帧结果（认不出的是 None）。p0..p1 是这一段在总进度里的范围。"""
     n = len(files)
-    rec = []          # 每帧结果
+    rec = []
     track = None
     skip_until = -1
     for i, f in enumerate(files):
         if i % 4 == 0:
-            emit(progress=round(0.05 + 0.85 * i / n, 3), stage=f'抠图 {i}/{n}')
+            emit(progress=round(p0 + (p1 - p0) * i / max(1, n), 3), stage=f'抠图 {i}/{n}')
         rgb = np.asarray(Image.open(f).convert('RGB'))
         H, W = rgb.shape[:2]
         r = None
@@ -181,7 +207,101 @@ def import_video(path, species, out_root, tmp, sam, loc):
             bbox=bb, score=r['score'], label=r['label'], edge=bs.edge_touch(bb, W, H),
             area=int(r['mask'].sum()), face=facing_of(r['mask']),
         ))
+    return rec
 
+
+def vision_frames(path, fps, tmp):
+    """纯色背景的视频（AI 生成的）：用系统"抠主体"整帧抠，整只鸟一次抠全，比跟踪稳。"""
+    binp = Path(__file__).resolve().parent / '.bin' / 'birdcut'
+    out = Path(tmp) / 'vision'
+    p = subprocess.Popen([str(binp), 'video', str(path), str(out), str(fps), '0', '9999', 'full'],
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    rec, files = [], []
+    for i, line in enumerate(p.stdout):
+        if i % 4 == 0:
+            emit(progress=round(0.05 + 0.8 * min(1, i / (fps * 6)), 3), stage=f'抠图 {i}')
+        try:
+            d = json.loads(line)
+        except Exception:
+            continue
+        f = Path(d.get('file', ''))
+        if not d.get('ok') or not f.exists():
+            rec.append(None)
+            continue
+        files.append(f)
+        rgba = Image.open(f).convert('RGBA')
+        a = np.asarray(rgba)[:, :, 3]
+        mask = bs.clean(a > 128)
+        bb = bs.bbox_of(mask)
+        if bb is None:
+            rec.append(None)
+            continue
+        W, H = rgba.size
+        x0, y0 = max(0, int(bb[0] - bb[2] * 0.06)), max(0, int(bb[1] - bb[3] * 0.06))
+        x1, y1 = min(W, int(bb[0] + bb[2] * 1.06)), min(H, int(bb[1] + bb[3] * 1.06))
+        im = rgba.crop((x0, y0, x1, y1))
+        rec.append(dict(
+            im=im, anchor=(bb[0] + bb[2] / 2 - x0, bb[1] + bb[3] - y0), abs_anchor=(bb[0] + bb[2] / 2, bb[1] + bb[3]),
+            # 主体就是照片里那只鸟：理毛、埋头时分类器只看到一团羽毛，分数会很低，所以逐帧不按分数筛
+            bbox=bb, score=1.0, raw_score=float(d.get('bird', 0)), label=d.get('label', ''), edge=bs.edge_touch(bb, W, H),
+            area=int(mask.sum()), face=facing_of(mask),
+        ))
+    p.wait()
+    # 但整段里至少要有一帧明确认出是鸟
+    if not any(r and r['raw_score'] >= 0.3 for r in rec):
+        rec = [None for _ in rec]
+    return rec, files
+
+
+def drop_partial(rec, k=3, ratio=0.7):
+    """抠出来的面积比前后几帧小很多（只抠到半只鸟）的帧丢掉。"""
+    areas = [r['area'] if r else None for r in rec]
+    out = []
+    for i, r in enumerate(rec):
+        if r is None:
+            out.append(None)
+            continue
+        near = [a for a in areas[max(0, i - k):i + k + 1] if a]
+        med = float(np.median(near)) if near else r['area']
+        out.append(r if r['area'] >= ratio * med else None)
+    return out
+
+
+def import_video(path, species, out_root, tmp, sam, loc, action=None):
+    dur = video_duration(path) or 60
+    fps = 8.0
+    if '.ai-' in Path(path).name:
+        rec, files = vision_frames(path, fps, tmp)
+        rec = drop_partial(rec)
+        if not files:
+            return emit(done=True, clips=[], error='视频读不出来')
+        return finish_video(path, species, out_root, rec, files, fps, action)
+    if dur <= LONG_VIDEO_S:
+        emit(progress=0.02, stage='抽帧')
+        windows = [(None, None)]
+    else:
+        windows = coarse_windows(path, dur, tmp, loc)
+        if not windows:
+            return emit(done=True, clips=[], error='整段视频都没认出鸟',
+                        hint='鸟要占画面大一些、整只入镜；别用手握着或隔着笼子拍')
+    rec = []
+    files = []
+    base = 0.05 if dur <= LONG_VIDEO_S else 0.35
+    for k, (a, b) in enumerate(windows):
+        wf = extract_frames(path, fps, tmp, a, b, sub=f'w{k}')
+        if not wf:
+            continue
+        files += wf
+        span = (0.9 - base) / len(windows)
+        rec += track_frames(wf, fps, tmp, sam, loc, base + span * k, base + span * (k + 1))
+        rec.append(None)          # 段与段之间断开，片段不会跨段
+    if not files:
+        return emit(done=True, clips=[], error='视频读不出来')
+    return finish_video(path, species, out_root, drop_partial(rec), files, fps, action)
+
+
+def finish_video(path, species, out_root, rec, files, fps, action):
+    n = len(rec)
     emit(progress=0.92, stage='挑片段')
     found = [r for r in rec if r]
     if not found:
@@ -244,8 +364,8 @@ def import_video(path, species, out_root, tmp, sam, loc):
         # 横向移动超过 1.5 个身宽算"走路"，否则算"发呆"
         travel = abs(seg[-1]['abs_anchor'][0] - seg[0]['abs_anchor'][0])
         width = np.median([s['bbox'][2] for s in seg])
-        action = 'walk' if travel > 1.5 * width else 'idle'
-        out = out_root / species / action / f'{stem}_{c + 1}'
+        clip_action = action or ('walk' if travel > 1.5 * width else 'idle')
+        out = out_root / species / clip_action / f'{stem}_{c + 1}'
         save_clip(frames, out, round(fps, 2), facing, Path(path).name, float(np.mean([s['score'] for s in seg])))
         clips.append(str(out.relative_to(out_root)))
     total = sum(b - a + 1 for a, b in pieces) / fps
@@ -257,6 +377,7 @@ def main():
     ap.add_argument('file')
     ap.add_argument('--species', default='roseicollis')
     ap.add_argument('--out', default=str(ROOT / 'assets' / 'real'))
+    ap.add_argument('--action', default=None, help='指定动作（文件名里认出来的，或者 AI 生成时就知道的）')
     args = ap.parse_args()
     path = Path(args.file)
     ext = path.suffix.lower()
@@ -270,9 +391,9 @@ def main():
         emit(progress=0.01, stage='加载模型')
         sam = bs.Sam()
         if ext in VIDEO_EXT:
-            import_video(path, args.species, Path(args.out), tmp, sam, loc)
+            import_video(path, args.species, Path(args.out), tmp, sam, loc, args.action)
         else:
-            import_photo(path, args.species, Path(args.out), tmp, sam, loc)
+            import_photo(path, args.species, Path(args.out), tmp, sam, loc, args.action)
     except Exception as e:  # 让桌宠能显示出错原因
         emit(done=True, clips=[], error=f'处理出错：{e}')
         raise

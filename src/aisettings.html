@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+  <title>AI 生成动作 · 设置</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #f6f4ef; --card: #fff; --text: #2b2b2b; --muted: #777; --line: #ddd8cc; --accent: #4f8f4a; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #1f1f1d; --card: #2a2a27; --text: #ecebe6; --muted: #a3a29b; --line: #44433e; --accent: #7cc56f; } }
+    body { margin: 0; padding: 20px 22px; background: var(--bg); color: var(--text); font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    h1 { font-size: 17px; margin: 0 0 4px; }
+    p.note { color: var(--muted); margin: 0 0 14px; font-size: 12.5px; }
+    fieldset { border: 1px solid var(--line); border-radius: 10px; background: var(--card); padding: 12px 14px; margin: 0 0 12px; }
+    legend { padding: 0 6px; font-weight: 600; }
+    label { display: block; margin: 8px 0 3px; font-size: 13px; }
+    input, select { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--text); font: inherit; }
+    .row { display: flex; gap: 10px; } .row > div { flex: 1; }
+    .hint { color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .bar { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+    button { padding: 7px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); font: inherit; cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    #msg { color: var(--accent); margin-right: auto; align-self: center; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>AI 生成动作</h1>
+  <p class="note">用一张鸟的照片，让 AI 生成它做各种动作的短视频，再自动抠图变成真实形象的动作。密钥只保存在这台电脑上。</p>
+
+  <label for="provider">用哪个生成服务</label>
+  <select id="provider"></select>
+
+  <fieldset id="bailian">
+    <legend>阿里云百炼（通义万相）</legend>
+    <label>接口地址</label>
+    <input id="bailian_host" placeholder="https://dashscope.aliyuncs.com">
+    <div class="hint">公共地址，或带业务空间的地址：https://&lt;业务空间ID&gt;.cn-beijing.maas.aliyuncs.com</div>
+    <label>API Key</label>
+    <input id="bailian_apiKey" type="password" autocomplete="off">
+    <div class="row">
+      <div><label>模型</label>
+        <select id="bailian_model">
+          <option value="wan2.6-i2v-flash">wan2.6-i2v-flash（快，推荐）</option>
+          <option value="wan2.6-i2v">wan2.6-i2v</option>
+          <option value="wan2.5-i2v-preview">wan2.5-i2v-preview</option>
+          <option value="wan2.2-i2v-flash">wan2.2-i2v-flash</option>
+          <option value="wan2.2-i2v-plus">wan2.2-i2v-plus</option>
+        </select></div>
+      <div><label>清晰度</label>
+        <select id="bailian_resolution"><option>480P</option><option selected>720P</option><option>1080P</option></select></div>
+      <div><label>单价（元/秒，估算用）</label><input id="bailian_pricePerSecond" type="number" step="0.01" min="0"></div>
+    </div>
+  </fieldset>
+
+  <fieldset id="dishui">
+    <legend>滴水模型中心</legend>
+    <div class="hint">视频接口还在接入中，拿到接口文档后就能用。</div>
+    <label>接口地址</label>
+    <input id="dishui_baseUrl">
+    <label>API Key</label>
+    <input id="dishui_apiKey" type="password" autocomplete="off">
+    <div class="row">
+      <div><label>模型</label><input id="dishui_model" placeholder="seedance-2.0-fast"></div>
+      <div><label>单价（元/秒，估算用）</label><input id="dishui_pricePerSecond" type="number" step="0.01" min="0"></div>
+    </div>
+  </fieldset>
+
+  <div class="bar"><span id="msg"></span><button id="close">关闭</button><button id="save" class="primary">保存</button></div>
+
+  <script>
+    const FIELDS = { bailian: ['host', 'apiKey', 'model', 'resolution', 'pricePerSecond'], dishui: ['baseUrl', 'apiKey', 'model', 'pricePerSecond'] };
+    const $ = (id) => document.getElementById(id);
+    (async () => {
+      const c = await window.aiSettings.get();
+      for (const [k, name] of Object.entries(c.providers)) $('provider').add(new Option(name, k, false, k === c.provider));
+      for (const [p, keys] of Object.entries(FIELDS)) for (const k of keys) {
+        const el = $(`${p}_${k}`);
+        if (k === 'apiKey') el.placeholder = c[p].hasKey ? '已保存（不显示，留空就不修改）' : '粘贴你的 API Key';
+        else el.value = c[p][k] ?? '';
+      }
+    })();
+    $('save').onclick = async () => {
+      const out = { provider: $('provider').value };
+      for (const [p, keys] of Object.entries(FIELDS)) {
+        out[p] = {};
+        for (const k of keys) out[p][k] = k === 'pricePerSecond' ? Number($(`${p}_${k}`).value || 0) : $(`${p}_${k}`).value.trim();
+      }
+      await window.aiSettings.save(out);
+      for (const p of Object.keys(FIELDS)) { $(`${p}_apiKey`).value = ''; }
+      $('msg').textContent = '已保存';
+      setTimeout(() => { $('msg').textContent = ''; }, 2000);
+    };
+    $('close').onclick = () => window.close();
+  </script>
+</body>
+</html>

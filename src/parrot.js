@@ -17,17 +17,17 @@ const SHAPES = {
   // scale：整只鸟的高矮胖瘦；tail：short 短 / mid 中等偏宽 / long 细长 / xlong 特别长
   // 牡丹：圆滚滚、大头、大嘴、短尾
   lovebird: { head: { s: 1.05, y: 80 }, body: { cx: 98, cy: 132, rx: 52, ry: 50 }, wing: { sx: 1, sy: 1 },
-    beak: { s: 1, dx: 0, dy: 0 }, tail: 'short', scale: { x: 1, y: 1 } },
+    beak: { s: 1, dx: 0, dy: 0 }, tail: 'short', scale: { x: 1, y: 1 }, legTop: 171 },
   // 虎皮：苗条、小头小嘴（嘴大半藏在羽毛里）、长尾；蜡膜、喉斑、头背波浪纹、黑边翅膀
   budgie: { head: { s: 0.84, y: 88 }, body: { cx: 101, cy: 138, rx: 36, ry: 47 }, wing: { sx: 0.84, sy: 1.14 }, ringR: 7.6,
-    beak: { s: 0.62, dx: -6, dy: 8 }, tail: 'long', scale: { x: 0.95, y: 1 },
+    beak: { s: 0.62, dx: -6, dy: 8 }, tail: 'long', scale: { x: 0.95, y: 1 }, legTop: 170,
     cere: true, throatSpots: true, stripes: true, scallopDark: true },
   // 玄凤：修长——身子高而窄、脖子长（头更高）、翅膀和尾巴都长；冠羽、橙色腮斑、翅膀白斑
-  cockatiel: { head: { s: 0.88, y: 70 }, body: { cx: 102, cy: 128, rx: 35, ry: 56 }, wing: { sx: 0.8, sy: 1.17 },
-    beak: { s: 0.72, dx: -4, dy: 5 }, tail: 'xlong', scale: { x: 0.95, y: 1.05 }, crest: true, cheekSpot: true, wingBar: true },
+  cockatiel: { head: { s: 0.88, y: 66 }, body: { cx: 102, cy: 121, rx: 35, ry: 53 }, wing: { sx: 0.8, sy: 1.12 },
+    beak: { s: 0.72, dx: -4, dy: 5 }, tail: 'xlong', scale: { x: 0.95, y: 1.05 }, legTop: 163, crest: true, cheekSpot: true, wingBar: true },
   // 和尚：敦实——大头、胸脯饱满、身子宽，尾巴中等偏宽；灰脸灰胸带鳞片纹
   monk: { head: { s: 1.06, y: 84 }, body: { cx: 97, cy: 136, rx: 51, ry: 48 }, wing: { sx: 1, sy: 1.02 },
-    beak: { s: 0.95, dx: -1, dy: 1 }, tail: 'mid', scale: { x: 1.03, y: 0.97 }, breastScallops: true },
+    beak: { s: 0.95, dx: -1, dy: 1 }, tail: 'mid', scale: { x: 1.03, y: 0.97 }, legTop: 172, breastScallops: true },
 };
 
 // k<0 变暗，k>0 变亮
@@ -281,25 +281,28 @@ function parrotSVG(shapeId, p) {
 </g>
 
 <g id="pose" filter="url(#paint)">
+  <g id="upperBack">
   <g id="tail" class="hit">
     ${tail}
+  </g>
   </g>
 
   <g id="feet">
     <!-- 远处那只脚：在后面、颜色暗一点、略高 -->
     <g id="footL">
-      <path d="M96,171 L96.5,181.5" stroke="${shade(p.feet, -0.18)}" stroke-width="3.2" stroke-linecap="round"/>
+      <path id="legLineL" d="M96,${(S.legTop || 171)} L96.5,181.5" stroke="${shade(p.feet, -0.18)}" stroke-width="3.2" stroke-linecap="round"/>
       <path d="M96.5,181.5 Q101.5,181.5 104.5,184.5 M96.5,181.5 Q100.5,183.5 102.5,186.5 M96.5,181.5 Q92.5,182.5 90.5,185"
             stroke="${shade(p.feet, -0.18)}" stroke-width="2.4" stroke-linecap="round" fill="none"/>
     </g>
     <!-- 近处那只脚：两趾朝前、一趾朝后 -->
     <g id="footR">
-      <path d="M104,172 L104.5,183" stroke="${p.feet}" stroke-width="3.4" stroke-linecap="round"/>
+      <path id="legLineR" d="M104,${(S.legTop || 171) + 1} L104.5,183" stroke="${p.feet}" stroke-width="3.4" stroke-linecap="round"/>
       <path d="M104.5,183 Q109.5,183 112.5,186.5 M104.5,183 Q108.5,185.5 110.5,188.5 M104.5,183 Q100,184 98,187"
             stroke="${p.feet}" stroke-width="2.6" stroke-linecap="round" fill="none"/>
     </g>
   </g>
 
+  <g id="upper">
   <g id="bodyG" class="hit">
     <ellipse cx="${B.cx - B.rx + 12}" cy="150" rx="16" ry="13" fill="${p.rump}" ${line(p.rump)}/>
     <ellipse cx="${B.cx}" cy="${B.cy}" rx="${B.rx}" ry="${B.ry}" fill="url(#bodyGrad)" ${line(p.body)}/>
@@ -401,6 +404,7 @@ function parrotSVG(shapeId, p) {
   </g>
 
   ${scratchLeg}
+  </g>
 </g>`;
 }
 
@@ -439,13 +443,18 @@ function basePose() {
     legL: 0, legR: 0, legRX: 0, tuckFeet: false, tail: 0,
     seeds: false, paperGround: false, beakPaper: false, tailPaper: 0,
     shadow: 1, scratchFoot: 0, front: false,
+    legExt: 0,              // 伸长腿：0 平常，1 腿全伸直（藏在羽毛里的"大长腿"露出来）
+    legLX: 0,               // 远处那只脚往前/后迈的距离
     crest: 0.35,            // 冠羽：0 贴在后脑，1 完全竖起
     mirror: false, beakTwig: false, twigGround: false, twigPile: 0,
   };
 }
 
 function makeCartoon(svg, shapeId) {
-  const SC = (SHAPES[shapeId] || SHAPES.lovebird).scale || { x: 1, y: 1 };
+  const SH = SHAPES[shapeId] || SHAPES.lovebird;
+  const SC = SH.scale || { x: 1, y: 1 };
+  const LEG_TOP = SH.legTop || 171;
+  const LEG_LIFT = 15;      // 腿全伸直时身子抬高多少
   const $ = (id) => svg.querySelector('#' + id);
   const els = {
     pose: $('pose'), head: $('head'), wing: $('wing'), jaw: $('jaw'), eye: $('eye'),
@@ -455,6 +464,7 @@ function makeCartoon(svg, shapeId) {
     tailPaper: $('tailPaper'), shadow: $('shadow'), footFront: $('footFront'),
     headSide: $('headSide'), headFront: $('headFront'), eyesFront: $('eyesFront'),
     crest: $('crest'), crestFront: $('crestFront'),
+    upper: $('upper'), upperBack: $('upperBack'), legLineL: $('legLineL'), legLineR: $('legLineR'),
     mirror: $('mirror'), beakTwig: $('beakTwig'), twigGround: $('twigGround'),
   };
   const strips = [...svg.querySelectorAll('#tailPaper .strip')];
@@ -486,12 +496,18 @@ function makeCartoon(svg, shapeId) {
     if (els.crestFront) els.crestFront.setAttribute('transform', `translate(114 44) scale(1 ${0.35 + 0.65 * c}) translate(-114 -44)`);
     // 腮红常驻淡淡一层，开心时更红
     els.blush.setAttribute('opacity', 0.3 + 0.55 * p.blush);
-    els.footL.setAttribute('transform', `translate(0 ${-p.legL})`);
+    // 伸长腿：上半身抬高，腿线跟着拉长，脚趾不动
+    const lift = LEG_LIFT * Math.max(0, Math.min(1, p.legExt));
+    els.upper.setAttribute('transform', lift ? `translate(0 ${-lift})` : '');
+    els.upperBack.setAttribute('transform', lift ? `translate(0 ${-lift})` : '');
+    els.legLineL.setAttribute('d', `M96,${LEG_TOP - lift} L96.5,181.5`);
+    els.legLineR.setAttribute('d', `M104,${LEG_TOP + 1 - lift} L104.5,183`);
+    els.footL.setAttribute('transform', `translate(${p.legLX} ${-p.legL})`);
     els.footR.setAttribute('transform', `translate(${p.legRX} ${-p.legR})`);
     show(els.footR, !p.scratchFoot);
     show(els.footFront, !!p.scratchFoot);
     if (p.scratchFoot) els.footFront.setAttribute('transform', `translate(${p.scratchFoot} ${-Math.abs(p.scratchFoot) * 0.6})`);
-    els.feet.setAttribute('transform', p.tuckFeet ? 'translate(98 172) scale(1 0.4) translate(-98 -172)' : '');
+    show(els.feet, !p.tuckFeet);
     els.tail.setAttribute('transform', `rotate(${p.tail} ${P.tail[0]} ${P.tail[1]})`);
     show(els.seeds, p.seeds);
     show(els.paperGround, p.paperGround);

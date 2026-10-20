@@ -32,6 +32,8 @@
   let family = 'lovebird';
   let traits = FAMILIES.lovebird;
   let hopT = 1;           // 点击时的小跳
+  const CLIMB_LEAN = 20;  // 爬墙时身子往后仰的角度
+  let menuOpen = false;   // 右键菜单开着：鸟原地停住
   let flipAngle = 0;      // 倒挂时舞台的旋转角度（慢慢转过去）
   // ---- 动作衔接：换动作时从当前姿势过渡过去，加上惯性、转身、落地缓冲 ----
   let shownPose = null;   // 上一帧实际画出来的姿势
@@ -145,6 +147,7 @@
     free: ['自由啦～', '拜拜～', '我飞走咯'],
     flutter: ['扑棱扑棱', '慢慢降落～'],
     gnaw: ['嘎吱嘎吱', '这个文件好吃', '磨磨牙', '帮你整理文件（物理）'],
+    climb: ['嘿咻嘿咻往上爬', '嘴就是我的第三只脚！', '攀禽了解一下'],
     gnawDone: ['吃饱了～', '呸，不好吃', '下次啃那个'],
     dizzy: ['晕晕的…', '天旋地转'],
     happy: ['好舒服～', '再摸摸'],
@@ -157,12 +160,63 @@
   // dur: 持续秒数范围；w: 随机挑选权重（家族习性可覆盖）；enter/update: 进入时和每帧（管位置）
   const BEHAVIORS = {
     idle: { dur: [3, 7], w: 3, enter(s) { s.front = Math.random() < 0.3; } },
+    tall: { dur: [3, 3], w: 0.8 },
+    // 走到某个位置后接着做别的（爬墙前先走到屏幕边）
+    walkto: {
+      dur: [30, 30], w: 0,
+      update(dt, s) {
+        const dx = s.tx - pos.x;
+        dir = dx > 0 ? 1 : -1;
+        const a = Math.abs(Math.sin((cur.t % WALK_STEP) / WALK_STEP * Math.PI * 2));
+        const step = Math.min(Math.abs(dx), 40 * (0.5 + a) * scale() * dt);
+        pos.x += Math.sign(dx) * step;
+        if (Math.abs(dx) < 2) setState(s.then.id, s.then.opts);
+      },
+    },
+    // 爬屏幕边：身子竖着贴住屏幕边（往后仰一点），脚蹬着，嘴勾一下、身子拉一截、脚往上挪
+    climb: {
+      dur: [60, 60], w: 0,
+      enter(s) {
+        dir = s.side;
+        // 贴墙的是肚子最前面那一点：按体型算，再算上舞台往后仰的 CLIMB_LEAN 度（绕画面中心 100,100 转）
+        const sh = SHAPES[(SPECIES[settings.species] || SPECIES.roseicollis).shape] || SHAPES.lovebird;
+        const r = CLIMB_LEAN * Math.PI / 180, bx = sh.body.cx + sh.body.rx - 100, by = sh.body.cy - 100;
+        const front = (100 + bx * Math.cos(r) + by * Math.sin(r)) * 1.2;      // 画面单位 → 窗口像素
+        s.wallX = s.side > 0 ? wa().x + wa().width - front * scale() : wa().x - (240 - front) * scale();
+        s.topY = wa().y + wa().height * rand(0.02, 0.35);
+        s.started = false;
+      },
+      update(dt, s) {
+        pos.x += (s.wallX - pos.x) * Math.min(1, dt * 8);
+        // 先贴着地转过来（翻转动画），再开始往上爬
+        if (!s.started) { if (Math.abs(flipAngle + CLIMB_LEAN * s.side) < 2) s.started = true; else return; }
+        const c = cur.t % CLIMB_CYCLE;
+        if (c > 0.35 && c < 0.75) pos.y -= (24 / 0.4) * scale() * dt;     // 嘴勾住后往上拉
+        if (pos.y <= s.topY) {
+          // 牡丹、和尚爬到上面喜欢倒挂；其他鸟飞下来
+          if ((family === 'lovebird' || family === 'monk') && s.topY < wa().y + wa().height * 0.12) {
+            pos.y = s.topY; setState('fly', { noCrouch: true, quiet: true, thenHang: true, waypoints: [{ x: pos.x - s.side * 60 * scale(), y: ceilY() + 10 }] });
+          } else {
+            setState('fly', { noCrouch: true, quiet: true, waypoints: [{ x: pos.x - s.side * 160 * scale(), y: groundY() }] });
+          }
+        }
+      },
+    },
     walk: {
       dur: [2.5, 6], w: 3,
-      enter(s) { if (Math.random() < 0.5) dir = -dir; },
-      update(dt) {
-        const ph = (cur.t % 0.34) / 0.34;
-        if (ph > 0.15 && ph < 0.85) pos.x += dir * 70 * scale() * dt;
+      enter(s) {
+        if (Math.random() < 0.5) dir = -dir;
+        s.hop = family === 'budgie' && Math.random() < 0.35;   // 虎皮偶尔小跳着走
+      },
+      update(dt, s) {
+        if (s.hop) {
+          const ph = (cur.t % 0.34) / 0.34;
+          if (ph > 0.15 && ph < 0.85) pos.x += dir * 70 * scale() * dt;
+        } else {
+          // 鸭子步：每迈一步往前一冲，速度忽快忽慢
+          const a = Math.abs(Math.sin((cur.t % WALK_STEP) / WALK_STEP * Math.PI * 2));
+          pos.x += dir * 34 * (0.5 + a) * scale() * dt;
+        }
         if (pos.x < minX()) { pos.x = minX(); dir = 1; }
         if (pos.x > maxX()) { pos.x = maxX(); dir = -1; }
       },
@@ -581,10 +635,21 @@
       then: { id: 'gnaw', opts: { points, icon: t, dir: d, quiet: true } } });
   }
 
+  // 去最近的屏幕边爬墙：近就走过去，远就飞过去
+  function startClimb() {
+    const cx = pos.x + 120 * scale();
+    const side = cx > wa().x + wa().width / 2 ? 1 : -1;
+    const tx = side > 0 ? maxX() : minX();
+    const then = { id: 'climb', opts: { side, quiet: false } };
+    if (Math.abs(tx - pos.x) < wa().width * 0.3 && onGround()) setState('walkto', { tx, then, quiet: true });
+    else setState('fly', { quiet: true, waypoints: [{ x: tx, y: groundY() }], then });
+  }
+
   function startAction(id) {
     lastInteract = performance.now();
     if (!actionAllowed(id, family)) { say(`${traits.name}不会这个哦`); return; }
     if (id === 'gnaw') return startGnaw(false);
+    if (id === 'climb') return startClimb();
     if (id === 'hang') return setState('fly', { thenHang: true });
     if (id === 'fly') return setState('fly');
     if (!onGround()) {
@@ -716,7 +781,8 @@
 
   // ---------- 菜单命令 ----------
   api.onMenu(async (cmd, arg) => {
-    if (cmd === 'settings') { settings = arg; await applySettings(); }
+    if (cmd === 'menu-open') menuOpen = arg;
+    else if (cmd === 'settings') { settings = arg; await applySettings(); }
     else if (cmd === 'action') startAction(arg);
     else if (cmd === 'import-need-setup') {
       say(`看到 ${arg.count} 个新素材啦～\n要先下载抠图工具：\n右键 → 真实素材 → 下载自动抠图工具`, 7000);
@@ -742,6 +808,13 @@
       if (arg.hint) lines.push(arg.hint);
       say(lines.join('\n'), 9000);
       if (settings.mode === 'real' && arg.species === settings.species) await applySettings();
+    } else if (cmd === 'ai-progress') {
+      if (arg.stage && (!bubble.classList.contains('show') || /准备|开始/.test(arg.stage))) say(arg.stage, 3000);
+    } else if (cmd === 'ai-done') {
+      const lines = [`AI 生成好了 ${arg.done} 段` + (arg.failed ? `，失败 ${arg.failed} 段` : '')];
+      if (arg.errors && arg.errors.length) lines.push(arg.errors.join('；').slice(0, 60));
+      if (arg.done) lines.push('正在自动抠图导入…');
+      say(lines.join('\n'), 8000);
     } else if (cmd === 'come-back') {
       env = await api.getEnv();
       pos.x = wa().x + wa().width * 0.7;
@@ -762,14 +835,14 @@
 
   let paused = false;
   function frame(now) {
-    const dt = paused ? 0 : Math.min(0.05, (now - last) / 1000);
+    const dt = paused || menuOpen ? 0 : Math.min(0.05, (now - last) / 1000);
     last = now;
     cur.t += dt;
     const b = BEHAVIORS[cur.id];
     if (b.update) b.update(dt, cur.s);
 
     // 地面动作却悬在空中（比如换了显示器）→ 掉下去
-    const airborneOk = ['fly', 'hang', 'drag', 'thrown', 'flutter', 'bite', 'gnaw', 'peekaboo'].includes(cur.id);
+    const airborneOk = ['fly', 'hang', 'drag', 'thrown', 'flutter', 'bite', 'gnaw', 'peekaboo', 'climb'].includes(cur.id);
     if (!airborneOk && pos.y < groundY() - 2) setState('thrown', { vx: 0, vy: 0, quiet: true });
     // 越界时慢慢挪回来（硬夹会瞬移）；飞行、悬停、被扔的时候各自管边界
     const settle = Math.min(1, dt * 6);
@@ -785,6 +858,7 @@
         const n = chooseNext();
         if (n === 'gnaw') { setState('idle', { quiet: true, dur: 3 }); startGnaw(true); }
         else if (n === 'hang') setState('fly', { thenHang: true });
+        else if (n === 'climb') startClimb();
         else setState(n);
       }
     }
@@ -811,7 +885,7 @@
       const prevVel = velX;
       velX += ((pos.x - lastX) / dt - velX) * Math.min(1, dt * 6);
       const accel = (velX - prevVel) / dt;
-      const free = !['drag', 'thrown', 'hang', 'bite', 'fly', 'flutter', 'gnaw', 'peekaboo'].includes(cur.id);
+      const free = !['drag', 'thrown', 'hang', 'bite', 'fly', 'flutter', 'gnaw', 'peekaboo', 'climb'].includes(cur.id);
       // 匀速时微微前倾；减速（急停）时身子还想往前冲 → 前倾更多，然后弹簧回弹站稳
       const target = free ? Math.max(-12, Math.min(12, (velX * 0.04 - accel * 0.012) * dir / scale())) : 0;
       leanV += (120 * (target - lean) - 8 * leanV) * dt;
@@ -832,7 +906,7 @@
     const sdx = Math.abs(shownDir) < 0.04 ? 0.04 * Math.sign(dir) : shownDir;
 
     // 倒挂/翻回来都转过去，不一下子跳
-    const flipTarget = cur.id === 'hang' ? 180 : 0;
+    const flipTarget = cur.id === 'hang' ? 180 : cur.id === 'climb' ? -CLIMB_LEAN * dir : 0;
     flipAngle += Math.sign(flipTarget - flipAngle) * Math.min(Math.abs(flipTarget - flipAngle), 540 * dt);
     stage.style.transform = (flipAngle ? `rotate(${flipAngle.toFixed(1)}deg) ` : '') + `scaleX(${sdx.toFixed(3)})`;
     bubble.classList.toggle('below', flipAngle > 90);
@@ -864,6 +938,6 @@
   say(pickOne(lines('click')) + ' 我是' + (SPECIES[settings.species] || SPECIES.roseicollis).name, 2500);
   requestAnimationFrame(frame);
 
-  if (MOCK) window.__petDebug = { setState, cur: () => cur, pose: () => shownPose, dir: () => shownDir, inertia: () => ({ lean, velX, x: pos.x, dir }), pause: (v) => { paused = v; }, at: (id, t) => { setState(id, { quiet: true, dur: 99 }); cur.t = t; paused = true; } };
+  if (MOCK) window.__petDebug = { setState, cur: () => cur, pose: () => shownPose, dir: () => shownDir, inertia: () => ({ lean, velX, x: pos.x, dir }), pause: (v) => { paused = v; }, flip: () => flipAngle, pos: () => ({ ...pos }), act: (id) => startAction(id), at: (id, t) => { setState(id, { quiet: true, dur: 99 }); cur.t = t; paused = true; } };
   if (MOCK) buildMockPanel(startAction, async (k, v) => { settings = { ...settings, [k]: v }; await applySettings(); });
 })();

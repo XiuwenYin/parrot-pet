@@ -2,7 +2,9 @@
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const GNAW_HEAD = 34;
-const EAT_CYCLE = 1.6;  // 吃瓜子一轮的时长（pet.js 用它对齐咔嚓声和掉壳）   // 啃的时候头往下压的角度；对准用的就是这个姿态
+const EAT_CYCLE = 1.6;
+const WALK_STEP = 0.9;
+const CLIMB_CYCLE = 1.1; // 爬墙一步（勾、拉、蹬）的时长  // 鸭子步一个周期（两只脚各迈一步）  // 吃瓜子一轮的时长（pet.js 用它对齐咔嚓声和掉壳）   // 啃的时候头往下压的角度；对准用的就是这个姿态
 
 // 每 ~3.5 秒眨一次眼
 function blink(t, seed = 0) {
@@ -30,16 +32,30 @@ const POSES = {
     p.tail = 2 * Math.sin(t * 3);
   },
 
+  // 走路：鹦鹉在地上是两脚交替、身子摇摇摆摆地走（鸭子步）；s.hop 为真时是小跳（虎皮偶尔这样）
   walk(t, s, p) {
-    const ph = (t % 0.34) / 0.34;
-    p.y = -Math.sin(ph * Math.PI) * 9;
-    p.rot = 5;
-    p.sy = ph < 0.1 ? 0.94 : 1;
-    p.legL = ph < 0.5 ? 3 : 0;
-    p.legR = ph >= 0.5 ? 3 : 0;
-    p.headRot = -4 * Math.sin(ph * TAU);
-    p.tail = 6 * Math.sin(ph * TAU);
     p.eye = blink(t, s.seed);
+    if (s.hop) {
+      const ph = (t % 0.34) / 0.34;
+      p.y = -Math.sin(ph * Math.PI) * 8;
+      p.rot = 5;
+      p.sy = ph < 0.1 ? 0.94 : 1;
+      p.headRot = -4 * Math.sin(ph * TAU);
+      p.tail = 6 * Math.sin(ph * TAU);
+      return;
+    }
+    const ph = (t % WALK_STEP) / WALK_STEP;             // 一个周期：先迈远处的脚，再迈近处的脚
+    const a = Math.sin(ph * TAU);
+    const liftL = ph < 0.5 ? Math.sin(ph * 2 * Math.PI) : 0;
+    const liftR = ph >= 0.5 ? Math.sin((ph - 0.5) * 2 * Math.PI) : 0;
+    p.legL = 3.5 * liftL;
+    p.legLX = 4 * Math.cos(ph * TAU);                    // 两只脚前后交替
+    p.legR = 3.5 * liftR;
+    p.legRX = -4 * Math.cos(ph * TAU);
+    p.rot = 4 + 4 * a;                                   // 一步一摇
+    p.y = -1.5 * Math.abs(a);
+    p.headRot = -5 * a;
+    p.tail = -7 * a;
   },
 
   fly(t, s, p) {
@@ -308,6 +324,47 @@ const POSES = {
     p.tail = -10;
     p.shadow = 0;
     p.eye = 0.75;
+  },
+
+  // 伸长腿站高：好奇、警觉时腿一下子伸直，露出平时藏在羽毛里的"大长腿"，左右看看再蹲回去
+  tall(t, s, p) {
+    const up = clamp(t / 0.35, 0, 1), down = clamp((t - 2.6) / 0.4, 0, 1);
+    const e = (x) => x * x * (3 - 2 * x);
+    p.legExt = e(up) * (1 - e(down));
+    p.sy = 1 + 0.03 * p.legExt;
+    p.headRot = p.legExt * 12 * Math.sin(t * TAU * 0.7);
+    p.crest = 0.4 + 0.5 * p.legExt;
+    p.eye = blink(t, s.seed) * (1 + 0.1 * p.legExt);
+    p.puff = 1 - 0.03 * p.legExt;                      // 站直时羽毛贴紧
+  },
+
+  walkto(t, s, p) { POSES.walk(t, {}, p); },
+
+  // 爬墙（画面上整只鸟转成竖直、脚朝墙；这里的"前方"就是往上，"脚那边"就是墙）：
+  // 嘴往前伸、低头勾住墙 → 身子往上拉 → 两只脚交替往上蹬。嘴当第三只脚用。
+  climb(t, s, p) {
+    // 身子竖着贴墙（舞台整体往后仰一点），脚往前蹬住墙；
+    // 一个循环：脖子往上伸、嘴张开 → 勾住墙往下一压、身子被拉上去 → 两只脚轮流往上挪
+    const c = t % CLIMB_CYCLE;
+    const sm = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+    const reach = c < 0.35 ? sm(c / 0.35) : c < 0.75 ? 1 - sm((c - 0.35) / 0.4) : 0;
+    const hook = c < 0.35 ? 0 : c < 0.75 ? sm((c - 0.35) / 0.15) : 1 - sm((c - 0.75) / 0.35);
+    p.headY = -7 * reach;
+    p.headX = 5 * reach;
+    p.headRot = -22 * reach + 26 * hook;               // 先仰头够高处，勾住后低头把身子拉上来
+    p.jaw = reach > 0.5 && hook < 0.2 ? 10 * reach : 0;
+    p.rot = 3 * hook;
+    p.tail = 12;                                       // 尾巴往下抵着墙撑住
+    p.wing = 6 + 6 * hook;
+    p.legLX = 12; p.legRX = 14;                        // 脚往前伸到墙上
+    const step = c >= 0.75 ? (c - 0.75) / (CLIMB_CYCLE - 0.75) : -1;
+    const alt = Math.floor(t / CLIMB_CYCLE) % 2;
+    if (step >= 0) {
+      const lift = Math.sin(step * Math.PI) * 6;
+      if (alt) p.legL = lift; else p.legR = lift;
+    }
+    p.shadow = 0;
+    p.eye = blink(t, s.seed);
   },
 
   // ---------- 各家族的习性动作 ----------

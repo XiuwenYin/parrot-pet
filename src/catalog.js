@@ -189,7 +189,7 @@ const SPECIES = {
 const FAMILIES = {
   lovebird: {
     name: '牡丹鹦鹉', voice: 'lovebird', hold: 'bite', petted: 'happy',
-    weights: { paper: 0.8, hang: 0.6 },
+    weights: { paper: 0.8, hang: 0.6, climb: 0.8 },
     lines: {
       click: ['啾！', '干嘛～', '陪我玩！', '战斗机出击！', '尖叫一下给你听？', '摸摸头'],
       warn: ['再不放我就咬了！', '放——开——', '我数到三！'],
@@ -198,7 +198,7 @@ const FAMILIES = {
   },
   budgie: {
     name: '虎皮鹦鹉', voice: 'budgie', hold: 'nibble', petted: 'happy',
-    weights: { talk: 1.6, mirror: 1.4, sing: 1.5, dance: 1.2, hang: 0.3 },
+    weights: { talk: 1.6, mirror: 1.4, sing: 1.5, dance: 1.2, hang: 0.3, climb: 0.5 },
     lines: {
       click: ['叽！', '你好呀', '小小脑袋大大智慧', '叽叽喳喳', '嘿嘿嘿'],
       talk: ['你好～你好～', '宝宝真棒！', '早上好呀', '吃饭啦吃饭啦', '叽里咕噜…漂亮…', '我是小虎皮'],
@@ -209,7 +209,7 @@ const FAMILIES = {
   },
   cockatiel: {
     name: '玄凤鹦鹉', voice: 'cockatiel', hold: 'hiss', petted: 'headdown', nightFright: true,
-    weights: { whistle: 1.6, peekaboo: 0.9, heartwing: 0.6, headdown: 0.6, sing: 0.2, talk: 0.3, hang: 0.2 },
+    weights: { whistle: 1.6, peekaboo: 0.9, heartwing: 0.6, headdown: 0.6, sing: 0.2, talk: 0.3, hang: 0.2, tall: 1.4, climb: 0.3 },
     lines: {
       click: ['啾～', '嘿～', '憨憨在此', '咕叽？', '在呢在呢'],
       talk: ['嘿～漂亮', 'Peekaboo～', '嘿～你好', '咕叽咕叽'],
@@ -221,7 +221,7 @@ const FAMILIES = {
   },
   monk: {
     name: '和尚鹦鹉', voice: 'monk', hold: 'bite', petted: 'happy',
-    weights: { talk: 1.8, nest: 1.0, quake: 0.7, hang: 0.5 },
+    weights: { talk: 1.8, nest: 1.0, quake: 0.7, hang: 0.5, climb: 0.7 },
     lines: {
       click: ['嘎！', '你好！', '干嘛呢？', '鸟中戏精上线', '哈喽！'],
       wake: ['起床啦！起床啦！', '嘎——早！'],
@@ -259,6 +259,9 @@ const ACTIONS = [
   { id: 'quake', name: '和尚抖', menu: true, only: ['monk'] },
   { id: 'hang', name: '倒挂', menu: true },
   { id: 'look', name: '盯着你看', menu: true },
+  { id: 'tall', name: '伸长腿站高', menu: true },
+  { id: 'climb', name: '爬屏幕边', menu: true },
+  { id: 'walkto', name: '走过去', menu: false },
   { id: 'sleep', name: '睡觉', menu: true },
   { id: 'gnaw', name: '啃桌面图标', menu: true },
   { id: 'happy', name: '被摸开心', menu: false },

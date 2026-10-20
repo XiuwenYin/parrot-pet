@@ -1,11 +1,13 @@
 // 鹦鹉桌宠 — Electron 主进程
 // 窗口本身就是"鸟"：透明、无边框、置顶；渲染进程算物理，主进程负责挪窗口、菜单、读素材。
-const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { SPECIES, FAMILIES, MODES, ACTIONS, SIZES, familyOf, actionAllowed } = require('./src/catalog');
 const { createImporter } = require('./src/importer');
 const { createDesk } = require('./src/desk');
+const { createVideoGen } = require('./src/videogen');
+const { aiActionList, AI_CORE } = require('./src/aiprompts');
 
 const BASE_W = 240;
 const BASE_H = 260;
@@ -24,6 +26,8 @@ let win;
 let tray;
 let importer;
 let desk;
+let videogen;
+let aiSettingsWin;
 let settingsPath;
 let settings = { species: 'roseicollis', mode: 'cartoon', size: 'medium', muted: false };
 
@@ -155,6 +159,16 @@ function buildMenuTemplate() {
     },
     { label: '静音', type: 'checkbox', checked: settings.muted, click: (item) => setSetting('muted', item.checked) },
     { type: 'separator' },
+    {
+      label: 'AI 生成动作',
+      submenu: [
+        { label: '用一张照片生成动作…', enabled: !!videogen && !videogen.busy(), click: () => startAiGenerate() },
+        ...(videogen && videogen.busy()
+          ? [{ label: `生成中 ${videogen.counts().done + videogen.counts().failed}/${videogen.counts().total}（取消还没开始的）`, click: () => { videogen.cancelQueued(); rebuildTray(); } }]
+          : []),
+        { label: '设置（服务、密钥）…', click: () => openAiSettings() },
+      ],
+    },
     { label: '叫它回来', click: () => send('come-back') },
     ...(desk && desk.hasMarks() ? [{ label: '打扫咬痕和纸屑', click: () => desk.onPet('clean') }] : []),
     {
@@ -224,6 +238,54 @@ function listRealAssets(species) {
 // 窗口坐标必须是 32 位整数：-0（比如 Math.round(-0.3)）和越界的数都会让 Electron 直接报错
 const toInt = (v) => (Number.isFinite(v) ? Math.max(-1e6, Math.min(1e6, Math.round(v))) || 0 : null);
 
+// ---------- AI 生成动作 ----------
+function openAiSettings() {
+  if (aiSettingsWin && !aiSettingsWin.isDestroyed()) { aiSettingsWin.show(); aiSettingsWin.focus(); return; }
+  aiSettingsWin = new BrowserWindow({
+    width: 560, height: 640, title: 'AI 生成动作 · 设置', resizable: true,
+    webPreferences: { preload: path.join(__dirname, 'src', 'aisettings_preload.js'), contextIsolation: true },
+  });
+  aiSettingsWin.setMenuBarVisibility(false);
+  aiSettingsWin.loadFile(path.join(__dirname, 'src', 'aisettings.html'));
+  app.focus({ steal: true });
+}
+
+async function startAiGenerate() {
+  if (!videogen.ready()) {
+    await dialog.showMessageBox({ type: 'info', message: '先填一下生成服务的密钥', detail: '在接下来的设置窗口里选服务、填 API Key，保存后再来。', buttons: ['好'] });
+    return openAiSettings();
+  }
+  app.focus({ steal: true });
+  const species = settings.species;
+  const family = familyOf(species);
+  const pick = await dialog.showOpenDialog({
+    title: `选一张${SPECIES[species].name}的照片`,
+    message: '整只鸟清楚入镜的照片最好；人和背景会先被自动去掉，不会发出去',
+    properties: ['openFile'],
+    filters: [{ name: '照片', extensions: ['jpg', 'jpeg', 'png', 'heic', 'webp', 'bmp'] }],
+  });
+  if (pick.canceled || !pick.filePaths[0]) return;
+  const all = aiActionList(family);
+  const eAll = videogen.estimate(all.length);
+  const eCore = videogen.estimate(AI_CORE.length);
+  const names = (ids) => ids.map(id => (ACTIONS.find(a => a.id === id) || { name: id }).name).join('、');
+  const money = (e) => (e.yuan ? `约 ¥${e.yuan}` : '免费');
+  const r = await dialog.showMessageBox({
+    type: 'question',
+    message: `用这张照片给「${SPECIES[species].name}」生成动作？`,
+    detail: `服务：${eAll.provider}（${eAll.model}），每段 5 秒。\n` +
+      `全部 ${all.length} 段：${names(all)}。\n核心 ${AI_CORE.length} 段：${names(AI_CORE)}。\n\n` +
+      `费用按生成的视频秒数计，提交后取消不了。生成大约要几分钟，好了会自动抠图导入，气泡会告诉你进度。`,
+    buttons: [`生成全部 ${all.length} 段（${money(eAll)}）`, `只生成核心 ${AI_CORE.length} 段（${money(eCore)}）`, '取消'],
+    defaultId: 1,
+    cancelId: 2,
+  });
+  if (r.response === 2) return;
+  const actions = r.response === 0 ? all : AI_CORE;
+  await videogen.start({ photo: pick.filePaths[0], species, family, actions });
+  rebuildTray();
+}
+
 ipcMain.on('move', (_e, x, y) => {
   const ix = toInt(x);
   const iy = toInt(y);
@@ -243,6 +305,8 @@ ipcMain.handle('get-env', () => {
 });
 
 ipcMain.handle('get-settings', () => settings);
+ipcMain.handle('ai-config-get', () => videogen.publicConfig());
+ipcMain.handle('ai-config-save', (_e, cfg) => { videogen.saveConfig(cfg); rebuildTray(); return true; });
 // 自定义声音：素材文件夹 sounds/<名字>.mp3 等，存在就返回 file:// 地址
 ipcMain.handle('custom-sound', (_e, name) => {
   for (const ext of ['mp3', 'm4a', 'wav', 'ogg', 'aac']) {
@@ -256,7 +320,12 @@ ipcMain.on('desk', (_e, cmd, arg) => { desk.onPet(cmd, arg); rebuildTray(); });
 ipcMain.handle('list-real-assets', (_e, species) => listRealAssets(species));
 
 ipcMain.on('context-menu', () => {
-  Menu.buildFromTemplate(buildMenuTemplate()).popup({ window: win });
+  // 菜单开着时让鸟原地停住，不然菜单跟着窗口跑，鼠标跟不上
+  win.webContents.send('menu-cmd', 'menu-open', true);
+  Menu.buildFromTemplate(buildMenuTemplate()).popup({
+    window: win,
+    callback: () => { if (!win.isDestroyed()) win.webContents.send('menu-cmd', 'menu-open', false); },
+  });
 });
 
 app.whenReady().then(() => {
@@ -264,11 +333,18 @@ app.whenReady().then(() => {
   if (process.platform === 'darwin' && app.dock) app.dock.hide();
   createWindow();
   desk = createDesk({ root: TOOLS_ROOT, getPetWindow: () => win });
+  videogen = createVideoGen({
+    userDataDir: app.getPath('userData'),
+    realDir: REAL_DIR,
+    toolsRoot: TOOLS_ROOT,
+    notify: (cmd, arg) => { send(cmd, arg); rebuildTray(); },
+  });
   importer = createImporter({
     root: TOOLS_ROOT,
     realDir: REAL_DIR,
     getSpecies: () => settings.species,
     speciesIds: Object.keys(SPECIES),
+    actionIds: ACTIONS.map(a => a.id),
     notify: (cmd, arg) => { send(cmd, arg); if (cmd === 'setup-done') rebuildTray(); },
   });
   if (IS_MAC) win.webContents.once('did-finish-load', () => importer.start());
