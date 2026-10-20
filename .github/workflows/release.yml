@@ -42,7 +42,7 @@ jobs:
           npx electron-builder --mac --publish never || {
             echo "dmg 打包失败，改打 zip"
             rm -f dist/*.dmg
-            npx electron-builder --mac zip --publish never
+            npx electron-builder --mac zip --arm64 --x64 --publish never
           }
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
