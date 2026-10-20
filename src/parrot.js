@@ -18,10 +18,11 @@ const SHAPES = {
   // 牡丹：圆滚滚、大头、大嘴、短尾
   lovebird: { head: { s: 1.05, y: 80 }, body: { cx: 98, cy: 132, rx: 52, ry: 50 }, wing: { sx: 1, sy: 1 },
     beak: { s: 1, dx: 0, dy: 0 }, tail: 'short', scale: { x: 1, y: 1 }, legTop: 171 },
-  // 虎皮：苗条、小头小嘴（嘴大半藏在羽毛里）、长尾；蜡膜、喉斑、头背波浪纹、黑边翅膀
+  // 虎皮：苗条、小头小嘴（嘴大半藏在羽毛里）、长尾；蜡膜、喉斑、头背波浪纹、黑边翅膀。
+  // 眼睛离嘴远一些（往后上挪），嘴低低地嵌在脸前下方的凹处，额头和脸的羽毛盖在嘴上面
   budgie: { head: { s: 0.84, y: 88 }, body: { cx: 101, cy: 138, rx: 36, ry: 47 }, wing: { sx: 0.84, sy: 1.14 }, ringR: 7.6,
-    beak: { s: 0.62, dx: -6, dy: 8 }, tail: 'long', scale: { x: 0.95, y: 1 }, legTop: 170,
-    cere: true, throatSpots: true, stripes: true, scallopDark: true },
+    beak: { s: 1, dx: 0, dy: 0 }, beakTip: [152, 101], beakFront: { s: 0.82, dy: 10 }, tail: 'long', scale: { x: 0.95, y: 1 }, legTop: 170,
+    eye: { dx: -5, dy: -3 }, cere: true, throatSpots: true, stripes: 'bars', scallopDark: true },
   // 玄凤：修长——身子高而窄、脖子长（头更高）、翅膀和尾巴都长；冠羽、橙色腮斑、翅膀白斑
   cockatiel: { head: { s: 0.88, y: 66 }, body: { cx: 102, cy: 121, rx: 35, ry: 53 }, wing: { sx: 0.8, sy: 1.12 },
     beak: { s: 0.72, dx: -4, dy: 5 }, tail: 'xlong', scale: { x: 0.95, y: 1.05 }, legTop: 163, crest: true, cheekSpot: true, wingBar: true },
@@ -176,7 +177,40 @@ function parrotSVG(shapeId, p) {
     return `<path d="${d}" stroke-width="${row.w}"/>`;
   }).join('');
   const barColor = p.stripe || shade(p.head, -0.75);
-  const stripes = S.stripes ? `<g clip-path="url(#headClip)"><g mask="url(#stripeFade)" stroke="${barColor}" fill="none" stroke-linecap="round" opacity="0.68">
+  // 虎皮的头纹：一道道接近水平的黑横纹，顺着头顶微微拱起；上面细、往后颈越来越粗，每一小段两头尖中间粗
+  const barRows = () => {
+    let k = 11, out = '';
+    const rnd = () => { k = (k * 9301 + 49297) % 233280; return k / 233280; };
+    for (let y = 41, ri = 0; y <= 108; y += 4.4, ri++) {
+      const t = (y - 41) / 67;
+      const xe = 124 - t * 30 - rnd() * 3, w = 0.6 + t * 1.7;
+      for (let x = 70 + rnd() * 3; x < xe; ) {
+        const len = 13 + rnd() * 14, x2 = Math.min(xe, x + len), m = (x + x2) / 2;
+        const bow = (xx) => y - 4 * (1 - Math.pow((xx - 100) / 34, 2)) * (1 - t) + 0.9 * Math.sin(xx * 0.22 + ri * 1.7);
+        const w2 = w * (0.8 + rnd() * 0.4);
+        out += `M${x.toFixed(1)},${bow(x).toFixed(1)} Q${m.toFixed(1)},${(bow(m) - w2).toFixed(1)} ${x2.toFixed(1)},${bow(x2).toFixed(1)} Q${m.toFixed(1)},${(bow(m) + w2).toFixed(1)} ${x.toFixed(1)},${bow(x).toFixed(1)} Z `;
+        x = x2 + 0.8 + rnd() * 1.6;
+      }
+    }
+    return `<path d="${out}" fill="${barColor}" stroke="none"/>`;
+  };
+  // 虎皮后颈：头纹一直延续到后颈和背上，越往下越粗；只在脖子靠后的一侧，往前（喉咙）渐渐消失
+  const napeBars = S.stripes === 'bars' ? (() => {
+    let k = 5, d = '';
+    const rnd = () => { k = (k * 9301 + 49297) % 233280; return k / 233280; };
+    for (let y = 86, ri = 0; y <= 122; y += 4.6, ri++) {
+      const w = 1.7 + ri * 0.12;
+      for (let x = 58 + rnd() * 3; x < 104; ) {
+        const len = 12 + rnd() * 12, x2 = Math.min(104, x + len), m = (x + x2) / 2;
+        const yy = (xx) => y + 2.2 * Math.sin(xx * 0.2 + ri * 1.3) + (xx - 80) * 0.12;
+        d += `M${x.toFixed(1)},${yy(x).toFixed(1)} Q${m.toFixed(1)},${(yy(m) - w).toFixed(1)} ${x2.toFixed(1)},${yy(x2).toFixed(1)} Q${m.toFixed(1)},${(yy(m) + w).toFixed(1)} ${x.toFixed(1)},${yy(x).toFixed(1)} Z `;
+        x = x2 + 1 + rnd() * 1.8;
+      }
+    }
+    return `<g clip-path="url(#neckClip)" mask="url(#napeFade)" opacity="0.8"><path d="${d}" fill="${barColor}"/></g>`;
+  })() : '';
+  const stripes = S.stripes === 'bars' ? `<g clip-path="url(#headClip)"><g opacity="0.8">${barRows()}</g></g>`
+    : S.stripes ? `<g clip-path="url(#headClip)"><g mask="url(#stripeFade)" stroke="${barColor}" fill="none" stroke-linecap="round" opacity="0.68">
       ${arcRows(116, 78, [
         { r: 34, a0: 140, a1: 282, w: 1.35 }, { r: 30, a0: 148, a1: 284, w: 1.25 }, { r: 26, a0: 158, a1: 286, w: 1.15 },
         { r: 22, a0: 172, a1: 288, w: 1.0 }, { r: 18, a0: 190, a1: 288, w: 0.9 }, { r: 14, a0: 212, a1: 286, w: 0.8 },
@@ -186,16 +220,43 @@ function parrotSVG(shapeId, p) {
       ${arcRows(114, 80, [{ r: 38, a0: 205, a1: 335, w: 1.4 }, { r: 33.5, a0: 212, a1: 328, w: 1.2 }, { r: 29, a0: 222, a1: 318, w: 1 }])}
     </g></g>` : '';
   // 虎皮的蜡膜（鼻子那块）
-  const cere = S.cere ? `<ellipse cx="146" cy="70" rx="5.5" ry="4" fill="${p.cere || '#6c8fd8'}" ${line(p.cere || '#6c8fd8')}/>` : '';
-  const cereFront = S.cere ? `<ellipse cx="114" cy="80" rx="7" ry="3.6" fill="${p.cere || '#6c8fd8'}" ${line(p.cere || '#6c8fd8')}/>` : '';
+  // 虎皮侧脸的蜡膜：不是贴在脸边的一个扁圆，而是像一顶小帽子扣在上喙根部、往前鼓出来，鼻孔在帽子前上方；
+  // 画在嘴的坐标里，跟着嘴一起缩放。下巴那边再盖一撮脸上的绒毛，嘴大半藏在羽毛里，侧面才有立体感
+  const cc2 = p.cere || '#6c8fd8';
+  const cere = '';
+  // 虎皮的嘴（侧面），完全按真鸟重画：
+  //  - 蜡膜是脸最前面一个圆鼓鼓的鼻包，大约和眼睛下沿一样高，鼻孔在前上方
+  //  - 上喙从鼻包底下长出来，又大又弯，几乎是垂直往下钩，尖端微微往回收
+  //  - 下喙很小，整个藏在下巴鼓起的绒毛里；只有张嘴（说话、吃东西）时才露出一点
+  const budgieBeak = `
+      <g id="jaw"><path d="M141.5,88 C145,89.5 148.5,93 149,97.5 C146,98.5 142.5,96.5 140.5,92 Z" fill="${p.beakDark}" ${line(p.beakDark)}/></g>
+      <path d="M130.5,85 C136,84.5 142,88 145,94 C147,99.5 145,105 139.5,107 C134,108 129.5,104.5 128.5,99 C127.8,94 128,88.5 130.5,85 Z" fill="${p.face}" filter="url(#soft1)"/>
+      <path d="M131.5,91 C134,94 135,98 134.2,102 M135.5,89 C138.5,92.5 139.5,96.5 138.8,100.5" stroke="${shade(p.face, -0.14)}" stroke-width="0.9" fill="none" opacity="0.55" stroke-linecap="round"/>
+      <path d="M140.5,77.5 C146,76.5 151.5,76.2 155,77.5 C158.2,83 158,92.5 152.8,101.5 C152.2,102.5 151,102.3 150.9,101 C150.4,95.5 147.5,90.5 142.8,88.2 C140.6,85.5 139.8,81.5 140.5,77.5 Z" fill="url(#beakGrad)" ${line(p.beak)}/>
+      <path d="M152.5,80 C155,84.5 155.3,90 153.6,95.5" stroke="#fff" stroke-width="1.5" fill="none" opacity="0.5" stroke-linecap="round"/>
+      <path d="M143.5,87.5 C147.5,90 150.2,94.5 151,99.5" stroke="${p.beakDark}" stroke-width="1.2" fill="none" opacity="0.55" stroke-linecap="round"/>
+      <g transform="translate(148.5 76.5) scale(0.8) translate(-148.5 -76.5)">
+      <path d="M139.5,77.5 C138.5,71 142.5,67 147.5,67 C153,67 156.8,70.5 156.3,75.5 C156,78.8 153.5,80.2 149,80 C145,79.8 142,79.5 139.5,77.5 Z" fill="${cc2}" ${line(cc2)}/>
+      <path d="M142.5,72.5 C144,70 146.5,69 149.5,69.2" stroke="#fff" stroke-width="1.6" fill="none" opacity="0.5" stroke-linecap="round"/>
+      <ellipse cx="152.6" cy="72.2" rx="1.6" ry="1.3" fill="${shade(cc2, -0.45)}"/></g>`;
+  const cereFront = S.cere ? `<path d="M114,84.5 C110,85 104.5,83 104.5,78.8 C104.5,75.5 107.5,74 110.5,74.5 C112,74.8 113.2,75.6 114,76.6 C114.8,75.6 116,74.8 117.5,74.5 C120.5,74 123.5,75.5 123.5,78.8 C123.5,83 118,85 114,84.5 Z" fill="${cc2}" ${line(cc2)}/>
+      <path d="M107,77.5 C108,76.2 109.5,75.8 111,76.2 M117,76.2 C118.5,75.8 120,76.2 121,77.5" stroke="#fff" stroke-width="1.1" fill="none" opacity="0.5" stroke-linecap="round"/>
+      <ellipse cx="110" cy="79" rx="1.3" ry="1" fill="${shade(cc2, -0.45)}"/><ellipse cx="118" cy="79" rx="1.3" ry="1" fill="${shade(cc2, -0.45)}"/>` : '';
   // 虎皮喉部黑点 + 脸颊紫斑
+  // 虎皮的脸：额头到喉咙一整块浅色面罩，下沿是一圈波浪，黑喉斑就长在每个波浪尖上；
+  // 面罩后沿在眼睛后面，后脑的横纹到这里为止。腮上一道斜着的紫蓝长斑
+  const ts = p.throatSpot || '#1e1e1e', cp = p.cheekPatch || '#6a5cc8';
   const throat = S.throatSpots ? `
-      <ellipse cx="141" cy="94" rx="3.2" ry="5.2" fill="${p.cheekPatch || '#6a5cc8'}" transform="rotate(-12 141 94)"/>
-      <circle cx="137" cy="103.5" r="2.1" fill="${p.throatSpot || '#1e1e1e'}"/><circle cx="129.5" cy="107" r="2.1" fill="${p.throatSpot || '#1e1e1e'}"/><circle cx="121.5" cy="108" r="2" fill="${p.throatSpot || '#1e1e1e'}"/>` : '';
+      <path d="M113,37 C130,35 146,47 149,64 C151,78 149.5,92 146,102 Q142.5,111.5 137.5,106.5 Q133,113.5 128,108 Q123,114.5 118,108.5 Q113,114 108.5,107.5 Q104,111 102,104 C99,96 101,86 106.5,78.5 C109.5,70 109,56 110,46 C110.5,41 111.5,38 113,37 Z"
+        fill="${p.face}" opacity="0.96" filter="url(#soft1)"/>
+      <ellipse cx="119" cy="95" rx="3.2" ry="8.2" fill="${cp}" opacity="0.9" transform="rotate(30 119 95)"/>
+      <circle cx="141.5" cy="108.5" r="2.2" fill="${ts}"/><circle cx="132.5" cy="110.8" r="2.3" fill="${ts}"/><circle cx="123" cy="111.5" r="2.3" fill="${ts}"/><circle cx="113.5" cy="111" r="2.1" fill="${ts}"/>` : '';
   const throatFront = S.throatSpots ? `
-      <ellipse cx="92" cy="96" rx="3.5" ry="5" fill="${p.cheekPatch || '#6a5cc8'}" opacity="0.85"/>
-      <ellipse cx="136" cy="96" rx="3.5" ry="5" fill="${p.cheekPatch || '#6a5cc8'}" opacity="0.85"/>
-      <circle cx="104" cy="106" r="2.2" fill="${p.throatSpot || '#1e1e1e'}"/><circle cx="114" cy="108" r="2.2" fill="${p.throatSpot || '#1e1e1e'}"/><circle cx="124" cy="106" r="2.2" fill="${p.throatSpot || '#1e1e1e'}"/>` : '';
+      <path d="M84,64 C86,44 100,38 114,38 C128,38 142,44 144,64 C146,80 145,94 141,103 Q136.5,110 132,104.5 Q127.5,111.5 123,105.5 Q118.5,112 114,106 Q109.5,112 105,105.5 Q100.5,111.5 96,104.5 Q91.5,110 87,103 C83,94 82,80 84,64 Z"
+        fill="${p.face}" opacity="0.96" filter="url(#soft1)"/>
+      <ellipse cx="90" cy="94" rx="3" ry="7.5" fill="${cp}" opacity="0.9" transform="rotate(-22 90 94)"/>
+      <ellipse cx="138" cy="94" rx="3" ry="7.5" fill="${cp}" opacity="0.9" transform="rotate(22 138 94)"/>
+      <circle cx="96" cy="107.5" r="2" fill="${ts}"/><circle cx="105" cy="108.5" r="2.1" fill="${ts}"/><circle cx="114" cy="109" r="2.1" fill="${ts}"/><circle cx="123" cy="108.5" r="2.1" fill="${ts}"/><circle cx="132" cy="107.5" r="2" fill="${ts}"/>` : '';
   // 玄凤的橙色腮斑
   const cheekSpot = S.cheekSpot && p.cheekSpot ? `<circle cx="133" cy="88" r="9" fill="${p.cheekSpot}" opacity="0.92" filter="url(#soft1)"/>` : '';
   const cheekSpotFront = S.cheekSpot && p.cheekSpot ? `<circle cx="92" cy="90" r="8" fill="${p.cheekSpot}" opacity="0.92" filter="url(#soft1)"/>
@@ -220,7 +281,7 @@ function parrotSVG(shapeId, p) {
         out.push(`<path d="M${x.toFixed(1)},${(y - h * 0.45).toFixed(1)} C${(x + w).toFixed(1)},${(y - h * 0.45).toFixed(1)} ${(x + w * 0.9).toFixed(1)},${(y + h * 0.35).toFixed(1)} ${(x - w * 0.15).toFixed(1)},${(y + h * 0.6).toFixed(1)} C${(x - w * 0.9).toFixed(1)},${(y + h * 0.3).toFixed(1)} ${(x - w).toFixed(1)},${(y - h * 0.45).toFixed(1)} ${x.toFixed(1)},${(y - h * 0.45).toFixed(1)} Z" transform="rotate(18 ${x.toFixed(1)} ${y.toFixed(1)})"/>`);
       }
     }
-    return `<g clip-path="url(#wingClip)" fill="${p.scallop || '#1e1e1e'}" stroke="${shade(p.wing, 0.3)}" stroke-width="1.5" stroke-linejoin="round" opacity="0.9">${out.join('')}</g>`;
+    return `<g clip-path="url(#wingClip)" fill="${p.scallop || '#1e1e1e'}" stroke="${shade(p.wing, 0.5)}" stroke-width="2.1" stroke-linejoin="round" opacity="0.92">${out.join('')}</g>`;
   })();
   // 虎皮长飞羽：深色、带浅色羽缘
   const budgieFlights = `<g clip-path="url(#wingClip)">
@@ -260,6 +321,12 @@ function parrotSVG(shapeId, p) {
   <linearGradient id="stripeFadeGrad" gradientUnits="userSpaceOnUse" x1="90" y1="70" x2="122" y2="52">
     <stop offset="0" stop-color="#fff"/><stop offset="0.45" stop-color="#fff"/><stop offset="1" stop-color="#000"/>
   </linearGradient>
+  <linearGradient id="napeFadeGrad" gradientUnits="userSpaceOnUse" x1="84" y1="0" x2="108" y2="0">
+    <stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/>
+  </linearGradient>
+  <mask id="napeFade" maskUnits="userSpaceOnUse" x="40" y="70" width="90" height="70">
+    <rect x="40" y="70" width="90" height="70" fill="url(#napeFadeGrad)"/>
+  </mask>
   <mask id="stripeFade" maskUnits="userSpaceOnUse" x="60" y="30" width="80" height="80">
     <rect x="60" y="30" width="80" height="80" fill="url(#stripeFadeGrad)"/>
   </mask>
@@ -409,7 +476,8 @@ function parrotSVG(shapeId, p) {
 
   <!-- 脖子：每帧按头的位置重算，把头和肩膀连成一整块（头低下、伸长、转动都不会"断开"） -->
   ${NS ? `<g id="neck"><path id="neckFill" fill="url(#neckGrad)"/>
-    <ellipse id="collarBand" rx="30" ry="${p.collar ? 10 : 16}" fill="${p.collar || shade(p.face, 0.2)}" opacity="${p.collar ? 1 : 0.32}" filter="url(#soft4)" clip-path="url(#neckClip)"/></g>` : ''}
+    <ellipse id="collarBand" rx="30" ry="${p.collar ? 10 : 16}" fill="${p.collar || shade(p.face, 0.2)}" opacity="${p.collar ? 1 : 0.32}" filter="url(#soft4)" clip-path="url(#neckClip)"/>
+    ${napeBars}</g>` : ''}
 
   <g id="wing" class="hit">
    <g transform="${wingT}">
@@ -442,6 +510,7 @@ function parrotSVG(shapeId, p) {
     ${cheekSpot}
     ${throat}
     <ellipse id="blush" cx="135" cy="89" rx="9" ry="5.5" fill="${cheek}" opacity="0.3" filter="url(#soft1)"/>
+    <g transform="translate(${(S.eye || {}).dx || 0} ${(S.eye || {}).dy || 0})">
     <g id="eye">
       ${ring}
       ${BEAN ? `<ellipse cx="128.4" cy="70.2" rx="3.5" ry="4.2" fill="${bean}"/>` : `
@@ -452,13 +521,14 @@ function parrotSVG(shapeId, p) {
     </g>
     <path id="eyeHappy" d="M121.5,72 Q128,64 134.5,72" stroke="${p.eye}" stroke-width="2.8" fill="none" stroke-linecap="round"/>
     <path id="eyeX" d="M123.5,65.5 L132.5,74.5 M132.5,65.5 L123.5,74.5" stroke="${p.eye}" stroke-width="2.4" stroke-linecap="round"/>
+    </g>
     ${cere}
     <g id="beak" transform="${beakT}">
-      <g id="jaw">
+      ${S.cere ? budgieBeak : `<g id="jaw">
         <path d="M143,82 C150,82 155,86 154,92 C149,95.5 144,93 141,87.5 Z" fill="${p.beakDark}" ${line(p.beakDark)}/>
       </g>
       <path d="M140,61 C154,59 163.5,69 162.5,83 C162,89.5 158,93 154.5,91 C154.5,84 150.5,79 142,81.5 C138.5,75 138,67 140,61 Z" fill="url(#beakGrad)" ${line(p.beak)}/>
-      <path d="M146,64.5 C153,66 157,71 158.5,77" stroke="#fff" stroke-width="1.6" fill="none" opacity="0.45" stroke-linecap="round"/>
+      <path d="M146,64.5 C153,66 157,71 158.5,77" stroke="#fff" stroke-width="1.6" fill="none" opacity="0.45" stroke-linecap="round"/>`}
       <rect id="beakPaper" x="150" y="88" width="34" height="5" rx="1" fill="#fbfaf4" stroke="#cfcabd" stroke-width="0.8" transform="rotate(28 150 88)"/>
       <path id="beakTwig" d="M146,90 L196,104 M176,98 L184,90" stroke="#8a6440" stroke-width="3.4" stroke-linecap="round"/>
     </g>
@@ -491,7 +561,7 @@ function parrotSVG(shapeId, p) {
       <circle cx="127.4" cy="73.6" r="0.9" fill="#fff" opacity="0.8"/>`}
     </g>
     ${cereFront}
-    <g transform="translate(114 ${80 + S.beak.dy}) scale(${S.beak.s}) translate(-114 -80)">
+    <g transform="translate(114 ${80 + (S.beakFront || S.beak).dy}) scale(${(S.beakFront || S.beak).s}) translate(-114 -80)">
       <path d="M104.5,79 C105.5,72.5 122.5,72.5 123.5,79 C123.5,89.5 119.5,97.5 114,101.5 C108.5,97.5 104.5,89.5 104.5,79 Z" fill="url(#beakGrad)" ${line(p.beak)}/>
       <path d="M108.5,94 C111,98.5 117,98.5 119.5,94" stroke="${p.beakDark}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
       <path d="M110,77 C111,82 111,87 110.5,91" stroke="#fff" stroke-width="1.5" fill="none" opacity="0.45" stroke-linecap="round"/>
@@ -519,8 +589,8 @@ function parrotBeakTip(shapeId, p) {
   const S = SHAPES[shapeId] || SHAPES.lovebird;
   const rad = (d) => d * Math.PI / 180;
   // 嘴的缩放 → 头部内层缩放
-  let x = 144 + S.beak.dx + (163 - 144) * S.beak.s;
-  let y = 76 + S.beak.dy + (86 - 76) * S.beak.s;
+  let x = S.beakTip ? S.beakTip[0] : 144 + S.beak.dx + (163 - 144) * S.beak.s;
+  let y = S.beakTip ? S.beakTip[1] : 76 + S.beak.dy + (86 - 76) * S.beak.s;
   x = 114 + (x - 114) * S.head.s;
   y = S.head.y + (y - 74) * S.head.s;
   // 头：translate(N+h) scale(flip*puff, puff) rotate(r) translate(-N)

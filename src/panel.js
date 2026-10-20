@@ -149,6 +149,8 @@ function render() {
   // 关于与更新
   renderUpdate();
   sw('autoUpdate', st.autoUpdate);
+  sw('showInTaskbar', st.showInTaskbar);
+  $('winCard').hidden = S.platform !== 'win32';
 }
 
 const AI_FIELDS = { bailian: ['host', 'apiKey', 'model', 'resolution', 'pricePerSecond'], dishui: ['baseUrl', 'apiKey', 'model', 'pricePerSecond'] };
@@ -205,7 +207,7 @@ for (const id of ['userName', 'petName']) {
   $(id).addEventListener('change', saveNames);
   $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
 }
-for (const key of ['beanEyes', 'muted', 'followMusic', 'autoUpdate']) {
+for (const key of ['beanEyes', 'muted', 'followMusic', 'autoUpdate', 'showInTaskbar']) {
   $(key).onclick = () => window.panel.set(key, !S.settings[key]);
 }
 

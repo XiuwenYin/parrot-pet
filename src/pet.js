@@ -1051,9 +1051,11 @@
   function frame(now) {
     const dt = paused ? 0 : Math.min(0.05, (now - last) / 1000);
     last = now;
-    cur.t += dt;
+    // 鼠标落在鸟身上时，飞、走这些在移动的动作放慢到四分之一，方便点到、抓住（迷你大小时尤其难点）
+    const hoverSlow = !ignoring && !press && ['fly', 'walk', 'walkto', 'march', 'flutter'].includes(cur.id) ? 0.25 : 1;
+    cur.t += dt * hoverSlow;
     const b = BEHAVIORS[cur.id];
-    if (b.update) b.update(dt, cur.s);
+    if (b.update) b.update(dt * hoverSlow, cur.s);
     checkCuriosity(dt);
 
     // 地面动作却悬在空中（比如换了显示器）→ 掉下去

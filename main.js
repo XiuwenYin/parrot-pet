@@ -29,6 +29,7 @@ let importer;
 let desk;
 let videogen;
 let panelWin;
+let panelClosedAt = 0;
 let updater;
 let settingsPath;
 // userName：主人叫什么；petNames：每只鸟（按鸟种）各自的名字
@@ -46,6 +47,9 @@ function loadSettings() {
 function saveSettings() {
   try { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2)); } catch (_) {}
 }
+
+// Windows 上默认在任务栏放一个图标：点它就把鸟叫回来、打开控制面板（Mac 用菜单栏图标，不放程序坞）
+function showInTaskbar() { return process.platform === 'win32' && settings.showInTaskbar !== false; }
 
 function sizeScale() {
   return (SIZES.find(s => s.id === settings.size) || SIZES.find(s => s.id === 'medium')).scale;
@@ -66,7 +70,8 @@ function createWindow() {
     resizable: false,
     hasShadow: false,
     alwaysOnTop: true,
-    skipTaskbar: true,
+    skipTaskbar: !showInTaskbar(),
+    title: '鹦鹉桌宠',
     focusable: true,
     // 允许窗口伸到菜单栏上方/屏幕外（倒挂、啃顶部图标时需要），否则系统会把窗口硬按回来，看起来像瞬移
     enableLargerThanScreen: true,
@@ -77,6 +82,19 @@ function createWindow() {
     },
   });
   win.setAlwaysOnTop(true, 'floating');
+  if (process.platform === 'win32') {
+    // 点任务栏图标：鸟正在前台时 Windows 会把它最小化——马上还原；不在前台时只是激活它。
+    // 两种情况都当成"叫它回来 + 打开控制面板"。鼠标就在鸟身上时是点鸟本身，不算；面板刚关掉时焦点会落回鸟，也不算
+    const createdAt = Date.now();
+    const fromTaskbar = () => {
+      if (Date.now() - panelClosedAt < 1500 || Date.now() - createdAt < 4000) return;   // 刚启动时窗口自己会拿到焦点
+      const c = screen.getCursorScreenPoint(), b = win.getBounds();
+      if (c.x >= b.x && c.x <= b.x + b.width && c.y >= b.y && c.y <= b.y + b.height) return;
+      send('come-back'); openPanel();
+    };
+    win.on('minimize', () => { win.restore(); fromTaskbar(); });
+    win.on('focus', fromTaskbar);
+  }
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   // 默认鼠标穿透透明区域，渲染进程在鼠标落到鸟身上时再关掉穿透
   win.setIgnoreMouseEvents(true, { forward: true });
@@ -221,11 +239,20 @@ function watchMusic() {
   }, 6000);
 }
 
+// 把窗口拿到最前面：最小化了先还原；Windows 有"防抢焦点"，从托盘/右键菜单打开的新窗口常被压在别的窗口后面，
+// 先临时置顶一下再取消
+function bringToFront(w) {
+  if (w.isMinimized()) w.restore();
+  w.show();
+  if (!IS_MAC) { w.setAlwaysOnTop(true); w.moveTop(); w.focus(); setTimeout(() => { if (!w.isDestroyed()) w.setAlwaysOnTop(false); }, 300); }
+  else { w.focus(); app.focus({ steal: true }); }
+}
+
 // 控制面板：鸟种、名字、动作、教说话、素材、AI 设置、检查更新都在这一个窗口里
 function openPanel(tab) {
   if (panelWin && !panelWin.isDestroyed()) {
     if (tab) panelWin.webContents.send('panel-tab', tab);
-    panelWin.show(); panelWin.focus(); app.focus({ steal: true });
+    bringToFront(panelWin);
     return;
   }
   panelWin = new BrowserWindow({
@@ -234,8 +261,10 @@ function openPanel(tab) {
     webPreferences: { preload: path.join(__dirname, 'src', 'panel_preload.js'), contextIsolation: true },
   });
   panelWin.setMenuBarVisibility(false);
+  // 面板关掉或最小化时，Windows 会把焦点交给下一个窗口（常常是鸟），这时别当成点了任务栏
+  for (const ev of ['closed', 'minimize', 'hide']) panelWin.on(ev, () => { panelClosedAt = Date.now(); });
   panelWin.loadFile(path.join(__dirname, 'src', 'panel.html'), { hash: tab || '' });
-  panelWin.once('ready-to-show', () => { panelWin.show(); app.focus({ steal: true }); });
+  panelWin.once('ready-to-show', () => bringToFront(panelWin));
   // PET_DEBUG：面板打开后存一张截图，渲染进程日志打到终端
   if (process.env.PET_DEBUG) {
     panelWin.webContents.on('console-message', (_e, level, message, line, source) => console.log(`[panel:${level}] ${message} (${path.basename(source)}:${line})`));
@@ -253,7 +282,7 @@ function panelState() {
     version: app.getVersion(),
     settings: {
       species: settings.species, mode: settings.mode, size: settings.size, beanEyes: !!settings.beanEyes,
-      muted: !!settings.muted, followMusic: settings.followMusic !== false, autoUpdate: settings.autoUpdate !== false,
+      muted: !!settings.muted, followMusic: settings.followMusic !== false, autoUpdate: settings.autoUpdate !== false, showInTaskbar: settings.showInTaskbar !== false,
       userName: settings.userName || '', petName: (settings.petNames || {})[settings.species] || '',
       learned, days: Math.max(1, Math.ceil((Date.now() - (settings.firstRun || Date.now())) / 86400000)),
     },
@@ -406,7 +435,7 @@ ipcMain.handle('names-save', (_e, v) => {
 });
 ipcMain.handle('ai-config-get', () => videogen.publicConfig());
 ipcMain.handle('panel-get', () => panelState());
-const PANEL_KEYS = ['species', 'mode', 'size', 'beanEyes', 'muted', 'followMusic', 'autoUpdate'];
+const PANEL_KEYS = ['species', 'mode', 'size', 'beanEyes', 'muted', 'followMusic', 'autoUpdate', 'showInTaskbar'];
 ipcMain.handle('panel-set', (_e, key, value) => {
   if (!PANEL_KEYS.includes(key)) return false;
   if (key === 'species' && !SPECIES[value]) return false;
@@ -415,6 +444,7 @@ ipcMain.handle('panel-set', (_e, key, value) => {
   setSetting(key, value);
   if (key === 'species') send('names-changed', { userName: settings.userName, petName: (settings.petNames || {})[settings.species] });
   if (key === 'followMusic' && !value && musicOn) { musicOn = false; send('music', false); }
+  if (key === 'showInTaskbar') win.setSkipTaskbar(!showInTaskbar());
   return true;
 });
 ipcMain.handle('panel-cmd', async (_e, cmd, arg) => {

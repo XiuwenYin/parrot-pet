@@ -1,9 +1,9 @@
 // 啃桌面图标（主进程）。纯视觉效果：咬痕和纸屑画在一层透明窗口上，不碰任何真实文件。
-//   - 图标位置：优先用 tools/.bin/deskicons（辅助功能接口，位置最准，桌面"自动排列"时也对）；
-//     没有辅助功能权限时退回问 Finder（AppleScript；第一次会弹"允许控制访达"）——
-//     但桌面开着自动排列时 Finder 给的坐标是旧的，这时宁可不啃不爬，也不对着空处啃
-//   - 有没有被挡：tools/.bin/deskinfo 列出各窗口位置，被窗口盖住的图标不啃；啃过的被盖住就把咬痕藏起来
-//   - 咬痕层：全屏透明、鼠标穿透的窗口，层级和桌宠一样但在桌宠下面
+//   - 图标位置：优先用 tools/.bin/deskicons；
+//     没有辅助功能权限时退回问 Finder（
+
+//   - 有没有被挡：tools/.bin/deskinfo 
+//   - 咬痕层：全屏透明、鼠标穿透的窗口
 const { BrowserWindow, screen } = require('electron');
 const { execFile } = require('child_process');
 const path = require('path');
