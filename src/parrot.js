@@ -38,10 +38,21 @@ function shade(hex, k) {
   return '#' + ch.map(v => v.toString(16).padStart(2, '0')).join('');
 }
 
-function parrotSVG(shapeId, p) {
+// 带脖子画法（"一颗豆子"）：头小一点、抬高一截，露出脖子；头、脖子、身子共用一条外轮廓
+function shapeOf(shapeId, neckStyle) {
   const S = SHAPES[shapeId] || SHAPES.lovebird;
+  if (!neckStyle) return S;
+  return { ...S, head: { s: S.head.s * 0.9, y: S.head.y - 15 } };
+}
+
+function parrotSVG(shapeId, p) {
+  const NS = p.neckStyle !== false;   // 默认都用一颗豆子的画法；neckStyle:false 回到旧画法
+  const S = shapeOf(shapeId, NS);
   const B = S.body;
   const line = (c) => `stroke="${shade(c, -0.38)}" stroke-opacity="0.45" stroke-width="1.3"`;
+  // 带脖子画法：各部分自己不描边，外轮廓由最底下一层"剪影"统一描（内部的线被上面的填色盖住）
+  const ownLine = (c) => (NS ? '' : line(c));
+  const silLine = (c) => `stroke="${shade(c, -0.38)}" stroke-opacity="0.45" stroke-width="2.6"`;
   const cheek = p.cheek || '#ff8fa3';
   const ring = p.eyeRing
     ? `<circle cx="128" cy="70" r="${S.ringR || 9}" fill="${p.eyeRing}" stroke="${shade(p.eyeRing, -0.2)}" stroke-opacity="0.4" stroke-width="0.8"/>`
@@ -53,14 +64,15 @@ function parrotSVG(shapeId, p) {
   const beakT = `translate(${144 + S.beak.dx} ${76 + S.beak.dy}) scale(${S.beak.s}) translate(-144 -76)`;
   const wingT = `translate(92 104) scale(${S.wing.sx} ${S.wing.sy}) translate(-92 -104)`;
 
-  // 挠头时抬起来的腿：先是一团和身体同色的羽毛（大腿），再是小腿和蜷着的脚趾；脚的高度跟着头走
+  // 挠头时抬起来的腿：大腿从肚子前下方抬起，膝盖往前顶出身体，小腿弯回来，脚停在脸颊下面（头会低下来凑过去）
   const scratchLeg = (() => {
-    const fy = 115 + (S.head.y - 80) * 1.05;          // 脚伸到脸颊后面
-    const fx = 121;
-    const ky = (156 + fy) / 2 + 4;                     // 膝盖
+    const R = 36 * S.head.s;
+    const fx = 121, fy = S.head.y + R * 0.8;                 // 脚：脸颊下方
+    const tx = B.cx + B.rx * 0.5, ty = B.cy + B.ry * 0.08;    // 大腿根
+    const kx = B.cx + B.rx - 1, ky = ty - (ty - fy) * 0.3;    // 膝盖：刚好顶到肚子边
     return `<g id="footFront">
-    <ellipse cx="111" cy="152" rx="8" ry="11" fill="${shade(p.belly, -0.08)}" transform="rotate(-25 111 152)" filter="url(#soft1)" opacity="0.95"/>
-    <path d="M113,146 Q${fx + 3},${ky} ${fx - 1},${ky - 6} L${fx},${fy}" stroke="${p.feet}" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <ellipse cx="${tx}" cy="${ty}" rx="11" ry="13" fill="${shade(p.belly, -0.06)}" transform="rotate(-35 ${tx} ${ty})" filter="url(#soft1)" opacity="0.95"/>
+    <path d="M${tx + 4},${ty - 4} Q${kx - 2},${ty - 2} ${kx},${ky} Q${kx - 1},${(ky + fy) / 2} ${fx + 3},${fy + 2}" stroke="${p.feet}" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
     <path d="M${fx},${fy} Q${fx + 5},${fy - 5} ${fx + 8},${fy - 3} M${fx},${fy} Q${fx + 5},${fy + 1} ${fx + 7},${fy + 4} M${fx},${fy} Q${fx - 3},${fy - 5} ${fx - 2},${fy - 9}"
           stroke="${p.feet}" stroke-width="2.6" stroke-linecap="round" fill="none"/>
   </g>`;
@@ -221,7 +233,7 @@ function parrotSVG(shapeId, p) {
   <radialGradient id="headGrad" cx="0.6" cy="0.36" r="0.75">
     <stop offset="0" stop-color="${shade(p.head, 0.18)}"/>
     <stop offset="0.6" stop-color="${p.head}"/>
-    <stop offset="1" stop-color="${shade(p.head, -0.18)}"/>
+    <stop offset="1" stop-color="${NS ? p.head : shade(p.head, -0.18)}"/>
   </radialGradient>
   <linearGradient id="faceGrad" x1="0" y1="0" x2="0.2" y2="1">
     <stop offset="0" stop-color="${p.forehead}"/>
@@ -242,6 +254,25 @@ function parrotSVG(shapeId, p) {
     <stop offset="0.5" stop-color="${p.beak}"/>
     <stop offset="1" stop-color="${p.beakDark}"/>
   </linearGradient>
+  <!-- 带脖子画法：脸上的颜色不按圆硬裁，四周软边、往下越来越淡，没有"下颌线" -->
+  <filter id="maskBlur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3.5"/></filter>
+  <linearGradient id="headSoftGrad" gradientUnits="userSpaceOnUse" x1="0" y1="82" x2="0" y2="114">
+    <stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/>
+  </linearGradient>
+  <mask id="headSoftFull" maskUnits="userSpaceOnUse" x="60" y="20" width="120" height="110">
+    <circle cx="114" cy="74" r="35.5" fill="url(#headFadeGrad)" filter="url(#maskBlur)"/>
+  </mask>
+  <mask id="headSoft" maskUnits="userSpaceOnUse" x="60" y="20" width="120" height="110">
+    <circle cx="114" cy="74" r="35" fill="url(#headSoftGrad)" filter="url(#maskBlur)"/>
+  </mask>
+  <!-- 领圈只画在脖子和身体范围内 -->
+  <clipPath id="neckClip"><path id="neckClipPath"/><ellipse cx="${B.cx}" cy="${B.cy}" rx="${B.rx}" ry="${B.ry}"/></clipPath>
+  <radialGradient id="neckGrad" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="60">
+    <stop offset="0" stop-color="${p.head}"/>
+    <stop offset="0.4" stop-color="${p.head}"/>
+    <stop offset="0.6" stop-color="${p.body}"/>
+    <stop offset="0.8" stop-color="${p.body}" stop-opacity="0"/>
+  </radialGradient>
   <linearGradient id="tailGrad" x1="1" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="${p.tail}"/>
     <stop offset="1" stop-color="${shade(p.tail, -0.25)}"/>
@@ -280,7 +311,7 @@ function parrotSVG(shapeId, p) {
   <path id="twigGround" d="M150,186 L184,182 M170,183 L176,178" stroke="#8a6440" stroke-width="3" stroke-linecap="round" filter="url(#paint)"/>
 </g>
 
-<g id="pose" filter="url(#paint)">
+<g id="pose" filter="url(#paint)"${NS ? ' data-neckstyle="1"' : ''}>
   <g id="upperBack">
   <g id="tail" class="hit">
     ${tail}
@@ -303,9 +334,15 @@ function parrotSVG(shapeId, p) {
   </g>
 
   <g id="upper">
+  ${NS ? `<g id="silhouette">
+    <ellipse cx="${B.cx}" cy="${B.cy}" rx="${B.rx}" ry="${B.ry}" fill="${p.body}" ${silLine(p.body)}/>
+    <path id="neckSil" fill="${p.body}" ${silLine(p.body)}/>
+    <g id="headSil"><g transform="translate(114 ${S.head.y}) scale(${S.head.s}) translate(-114 -74)">
+      <circle cx="114" cy="74" r="36" fill="url(#neckGrad)" ${silLine(p.head)}/></g></g>
+  </g>` : ''}
   <g id="bodyG" class="hit">
     <ellipse cx="${B.cx - B.rx + 12}" cy="150" rx="16" ry="13" fill="${p.rump}" ${line(p.rump)}/>
-    <ellipse cx="${B.cx}" cy="${B.cy}" rx="${B.rx}" ry="${B.ry}" fill="url(#bodyGrad)" ${line(p.body)}/>
+    <ellipse cx="${B.cx}" cy="${B.cy}" rx="${B.rx}" ry="${B.ry}" fill="url(#bodyGrad)" ${ownLine(p.body)}/>
     <g clip-path="url(#bodyClip)">
       ${bellyBlob}
       <ellipse cx="${B.cx - 2}" cy="${B.cy + B.ry}" rx="${B.rx}" ry="14" fill="${shade(p.body, -0.3)}" opacity="0.22" filter="url(#soft3)"/>
@@ -313,7 +350,11 @@ function parrotSVG(shapeId, p) {
     ${breast}
   </g>
 
-  ${collar}
+  ${NS ? '' : collar}
+
+  <!-- 脖子：每帧按头的位置重算，把头和肩膀连成一整块（头低下、伸长、转动都不会"断开"） -->
+  ${NS ? `<g id="neck"><path id="neckFill" fill="url(#neckGrad)"/>
+    <ellipse id="collarBand" rx="30" ry="${p.collar ? 10 : 16}" fill="${p.collar || shade(p.face, 0.2)}" opacity="${p.collar ? 1 : 0.32}" filter="url(#soft4)" clip-path="url(#neckClip)"/></g>` : ''}
 
   <g id="wing" class="hit">
    <g transform="${wingT}">
@@ -333,10 +374,10 @@ function parrotSVG(shapeId, p) {
    <g id="headSide">
     ${crestSide}
     <!-- 下巴往身体上晕开一点，头转动时接缝不生硬 -->
-    <ellipse cx="118" cy="104" rx="26" ry="12" fill="${p.face}" opacity="0.55" filter="url(#soft3)"/>
-    <circle cx="114" cy="74" r="36" fill="url(#headGrad)" mask="url(#headFade)"/>
-    <path d="M78.9,82 A36,36 0 1 1 149.1,82" fill="none" ${line(p.head)}/>
-    <g clip-path="url(#headClip)">
+    ${NS ? '' : `<ellipse cx="118" cy="104" rx="26" ry="12" fill="${p.face}" opacity="0.55" filter="url(#soft3)"/>`}
+    <circle cx="114" cy="74" r="36" fill="url(#headGrad)" mask="url(#${NS ? 'headSoftFull' : 'headFade'})"/>
+    ${NS ? '' : `<path d="M78.9,82 A36,36 0 1 1 149.1,82" fill="none" ${line(p.head)}/>`}
+    <g ${NS ? 'mask="url(#headSoft)"' : 'clip-path="url(#headClip)"'}>
       <path d="M124,37 C142,38 158,56 157,78 C156,100 142,114 118,116 C104,112 96,100 98,88 C100,78 108,72 112,64 C115,54 116,44 124,37 Z" fill="url(#faceGrad)" filter="url(#${p.faceSoft || 'soft4'})"/>
       <ellipse cx="128" cy="46" rx="16" ry="8" fill="#fff" opacity="0.22" filter="url(#soft3)"/>
     </g>
@@ -366,10 +407,10 @@ function parrotSVG(shapeId, p) {
    <!-- 正脸：盯着你看的时候用 -->
    <g id="headFront">
     ${crestFront}
-    <ellipse cx="114" cy="106" rx="28" ry="12" fill="${p.face}" opacity="0.55" filter="url(#soft3)"/>
-    <circle cx="114" cy="74" r="36" fill="url(#headGrad)" mask="url(#headFade)"/>
-    <path d="M78.9,82 A36,36 0 1 1 149.1,82" fill="none" ${line(p.head)}/>
-    <g clip-path="url(#headClip)">
+    ${NS ? '' : `<ellipse cx="114" cy="106" rx="28" ry="12" fill="${p.face}" opacity="0.55" filter="url(#soft3)"/>`}
+    <circle cx="114" cy="74" r="36" fill="url(#headGrad)" mask="url(#${NS ? 'headSoftFull' : 'headFade'})"/>
+    ${NS ? '' : `<path d="M78.9,82 A36,36 0 1 1 149.1,82" fill="none" ${line(p.head)}/>`}
+    <g ${NS ? 'mask="url(#headSoft)"' : 'clip-path="url(#headClip)"'}>
       <ellipse cx="114" cy="86" rx="35" ry="34" fill="url(#faceGrad)" filter="url(#${p.faceSoft || 'soft4'})"/>
       <ellipse cx="114" cy="46" rx="18" ry="8" fill="#fff" opacity="0.2" filter="url(#soft3)"/>
     </g>
@@ -451,7 +492,8 @@ function basePose() {
 }
 
 function makeCartoon(svg, shapeId) {
-  const SH = SHAPES[shapeId] || SHAPES.lovebird;
+  const NS = !!svg.querySelector('[data-neckstyle]');
+  const SH = shapeOf(shapeId, NS);
   const SC = SH.scale || { x: 1, y: 1 };
   const LEG_TOP = SH.legTop || 171;
   const LEG_LIFT = 15;      // 腿全伸直时身子抬高多少
@@ -466,20 +508,75 @@ function makeCartoon(svg, shapeId) {
     crest: $('crest'), crestFront: $('crestFront'),
     upper: $('upper'), upperBack: $('upperBack'), legLineL: $('legLineL'), legLineR: $('legLineR'),
     mirror: $('mirror'), beakTwig: $('beakTwig'), twigGround: $('twigGround'),
+    neckFill: $('neckFill'), neckSil: $('neckSil'), headSil: $('headSil'),
+    neckGrad: svg.querySelector('radialGradient[id^="neckGrad"]'),
   };
   const strips = [...svg.querySelectorAll('#tailPaper .strip')];
   const twigs = [...svg.querySelectorAll('#twigPile .twig')];
   const P = PARROT_PIVOT;
   const show = (el, on) => { if (el) el.style.display = on ? '' : 'none'; };
 
+  // 脖子：头（圆）和肩膀（身体上部的圆）之间的外公切线围成的一段，两条边稍微往外鼓一点，显得肉乎乎
+  const B = SH.body;
+  const HEAD_R = 36 * SH.head.s;
+  // 肩膀圆：大一点、贴近身体上半部的弧度，脖子的轮廓才能顺着滑进身体，不出折角
+  const BASE = { x: B.cx + 0.1 * B.rx, y: B.cy - 0.12 * B.ry, r: 0.82 * Math.min(B.rx, B.ry) };
+  const stops = els.neckGrad ? [...els.neckGrad.querySelectorAll('stop')] : [];
+  const neckClipPath = $('neckClipPath'), collarBand = $('collarBand');
+  const setNeck = (d) => { els.neckFill.setAttribute('d', d); els.neckSil.setAttribute('d', d); if (neckClipPath) neckClipPath.setAttribute('d', d); };
+  function drawNeck(p) {
+    const [nx, ny] = P.neck;
+    // 头的圆心：先按 headT 放好（114, head.y），再按头的变换（绕脖子转、缩放、平移）
+    const qx = 114 - nx, qy = SH.head.y - ny;
+    const a = p.headRot * Math.PI / 180;
+    const rx = qx * Math.cos(a) - qy * Math.sin(a), ry = qx * Math.sin(a) + qy * Math.cos(a);
+    const hx = nx + p.headX + rx * p.headFlip * p.headPuff, hy = ny + p.headY + ry * p.headPuff;
+    // 脖子和头一样宽：轮廓从头两侧直接顺下去，整只鸟是一颗"豆子"，不在头下面收腰
+    const r1 = HEAD_R * p.headPuff, r2 = BASE.r;
+    const dx = BASE.x - hx, dy = BASE.y - hy, d = Math.hypot(dx, dy);
+    if (d <= Math.abs(r1 - r2) + 0.5) { setNeck(''); return; }
+    const th = Math.atan2(dy, dx), al = Math.acos(Math.max(-1, Math.min(1, (r1 - r2) / d)));
+    const pt = (cx, cy, r, ang) => [cx + r * Math.cos(ang), cy + r * Math.sin(ang)];
+    const a1 = pt(hx, hy, r1, th + al), b1 = pt(BASE.x, BASE.y, r2, th + al);
+    const a2 = pt(hx, hy, r1, th - al), b2 = pt(BASE.x, BASE.y, r2, th - al);
+    // 两条边往外鼓：控制点放在边的中点再往外推
+    const bulge = (u, v, sgn) => {
+      const mx = (u[0] + v[0]) / 2, my = (u[1] + v[1]) / 2;
+      const k = 0.06 * Math.hypot(v[0] - u[0], v[1] - u[1]);
+      return [mx + Math.cos(th + sgn * Math.PI / 2) * k, my + Math.sin(th + sgn * Math.PI / 2) * k];
+    };
+    const c1 = bulge(a1, b1, 1), c2 = bulge(a2, b2, -1);
+    const f = (q) => q[0].toFixed(1) + ',' + q[1].toFixed(1);
+    setNeck(`M${f(a1)} Q${f(c1)} ${f(b1)} L${f(b2)} Q${f(c2)} ${f(a2)} Z`);
+    // 颜色从头往身体过渡
+    // 颜色按"离头中心多远"：头里面是头色，出了头就是身体色（头转到背后时两侧也不会冒出头色的尖角）
+    const GR = HEAD_R * p.headPuff + 30;
+    els.neckGrad.setAttribute('cx', hx.toFixed(1)); els.neckGrad.setAttribute('cy', hy.toFixed(1));
+    els.neckGrad.setAttribute('r', GR.toFixed(1));
+    // 渐变的位置按头的大小算：头底下先是领圈色，再过渡到身体色，最后透明（露出身体本来的明暗）
+    const R = HEAD_R * p.headPuff, o = (v) => Math.max(0, Math.min(1, v / GR)).toFixed(3);
+    const offs = [o(R * 0.5), o(R * 0.8), o(R + 6), o(R + 28)];
+    // 领圈：头底下一条横着的晕染带，垂直于脖子方向
+    if (collarBand) {
+      const ux = dx / d, uy = dy / d, cd = R + 3;
+      collarBand.setAttribute('cx', (hx + ux * cd).toFixed(1));
+      collarBand.setAttribute('cy', (hy + uy * cd).toFixed(1));
+      collarBand.setAttribute('rx', (r1 * 1.05).toFixed(1));
+      collarBand.setAttribute('transform', `rotate(${(Math.atan2(uy, ux) * 180 / Math.PI - 90).toFixed(1)} ${(hx + ux * cd).toFixed(1)} ${(hy + uy * cd).toFixed(1)})`);
+    }
+    stops.forEach((st, i) => st.setAttribute('offset', offs[i]));
+  }
+
   return function apply(p) {
     const [fx, fy] = P.feet;
     els.pose.setAttribute('transform',
       `translate(0 ${p.y}) rotate(${p.rot} ${fx} ${fy - 50}) translate(${fx} ${fy}) scale(${p.sx * p.puff * SC.x} ${p.sy * p.puff * SC.y}) translate(${-fx} ${-fy})`);
     const [nx, ny] = P.neck;
-    els.head.setAttribute('transform',
-      `translate(${nx + p.headX} ${ny + p.headY}) scale(${p.headFlip * p.headPuff} ${p.headPuff}) rotate(${p.headRot}) translate(${-nx} ${-ny})`);
+    const headTf = `translate(${nx + p.headX} ${ny + p.headY}) scale(${p.headFlip * p.headPuff} ${p.headPuff}) rotate(${p.headRot}) translate(${-nx} ${-ny})`;
+    els.head.setAttribute('transform', headTf);
+    if (els.headSil) els.headSil.setAttribute('transform', headTf);
     els.wing.setAttribute('transform', `rotate(${p.wing} ${P.shoulder[0]} ${P.shoulder[1]})`);
+    if (els.neckFill) drawNeck(p);
     els.jaw.setAttribute('transform', `rotate(${p.jaw} ${P.jaw[0]} ${P.jaw[1]})`);
     const [ex, ey] = P.eye;
     els.eye.setAttribute('transform', `translate(${ex} ${ey}) scale(1 ${Math.max(0.08, p.eye)}) translate(${-ex} ${-ey})`);

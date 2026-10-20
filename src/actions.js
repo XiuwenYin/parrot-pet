@@ -113,6 +113,7 @@ const POSES = {
   scratch(t, s, p) {
     p.scratchFoot = 0.01 + 3 * Math.sin(t * TAU * 14);
     p.headRot = 22 + 3 * Math.sin(t * TAU * 14);
+    p.headY = 5;                                       // 头低下来凑到脚上
     p.eye = 0.35;
     p.rot = -4;
     p.wing = -6;

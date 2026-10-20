@@ -67,6 +67,14 @@ function makeReal(canvas) {
   return {
     setClips(c) {
       clips = c || {};
+      // 有了 AI 生成的动作，就整只鸟都用 AI 的（连发呆也是），不再混用照片硬抠出来的那张：
+      // 两种来源放在一起，形象和姿势对不上，很怪
+      const isAi = (cl) => /\.ai-/.test(cl.frames[0] || '');
+      if (Object.values(clips).some(list => list.some(isAi))) {
+        const only = {};
+        for (const [id, list] of Object.entries(clips)) { const ai = list.filter(isAi); if (ai.length) only[id] = ai; }
+        clips = only;
+      }
       cache.clear();
       // 先把每个动作的第一帧加载上
       Object.values(clips).forEach(list => list.forEach(cl => img(cl.frames[0])));
