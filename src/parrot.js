@@ -308,7 +308,7 @@ function parrotSVG(shapeId, p) {
     <circle cx="114" cy="74" r="36" fill="url(#headGrad)" mask="url(#headFade)"/>
     <path d="M78.9,82 A36,36 0 1 1 149.1,82" fill="none" ${line(p.head)}/>
     <g clip-path="url(#headClip)">
-      <path d="M124,37 C142,38 158,56 157,78 C156,100 142,114 118,116 C104,112 96,100 98,88 C100,78 108,72 112,64 C115,54 116,44 124,37 Z" fill="url(#faceGrad)" filter="url(#soft4)"/>
+      <path d="M124,37 C142,38 158,56 157,78 C156,100 142,114 118,116 C104,112 96,100 98,88 C100,78 108,72 112,64 C115,54 116,44 124,37 Z" fill="url(#faceGrad)" filter="url(#${p.faceSoft || 'soft4'})"/>
       <ellipse cx="128" cy="46" rx="16" ry="8" fill="#fff" opacity="0.22" filter="url(#soft3)"/>
     </g>
     ${stripes}
@@ -341,7 +341,7 @@ function parrotSVG(shapeId, p) {
     <circle cx="114" cy="74" r="36" fill="url(#headGrad)" mask="url(#headFade)"/>
     <path d="M78.9,82 A36,36 0 1 1 149.1,82" fill="none" ${line(p.head)}/>
     <g clip-path="url(#headClip)">
-      <ellipse cx="114" cy="86" rx="35" ry="34" fill="url(#faceGrad)" filter="url(#soft4)"/>
+      <ellipse cx="114" cy="86" rx="35" ry="34" fill="url(#faceGrad)" filter="url(#${p.faceSoft || 'soft4'})"/>
       <ellipse cx="114" cy="46" rx="18" ry="8" fill="#fff" opacity="0.2" filter="url(#soft3)"/>
     </g>
     ${stripesFront}

@@ -29,13 +29,21 @@ jobs:
       - name: 编译 Mac 小工具（找鸟、抽帧、窗口位置）
         if: runner.os == 'macOS'
         run: zsh tools/build_helpers.sh
-      - name: 停掉 XProtect（GitHub 的 Mac 机器上它会占着新做的 dmg，导致卸载失败）
+      - name: 打包（Windows）
+        if: runner.os == 'Windows'
+        run: npx electron-builder --win --publish never
+      # GitHub 的 Mac 机器上 XProtect / Spotlight 常会占着刚做好的 dmg，导致卸载失败。
+      # 先关掉它们再打 dmg；还不行就退回打 zip（解压后把 App 拖进"应用程序"即可）。
+      - name: 打包（Mac）
         if: runner.os == 'macOS'
         run: |
-          sudo pkill -9 XProtect >/dev/null || true
-          while pgrep XProtect; do sleep 3; done
-      - name: 打包
-        run: npx electron-builder ${{ matrix.target }} --publish never
+          sudo mdutil -a -i off >/dev/null 2>&1 || true
+          sudo pkill -9 XProtect >/dev/null 2>&1 || true
+          npx electron-builder --mac --publish never || {
+            echo "dmg 打包失败，改打 zip"
+            rm -f dist/*.dmg
+            npx electron-builder --mac zip --publish never
+          }
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
@@ -43,6 +51,7 @@ jobs:
           name: installers-${{ runner.os }}
           path: |
             dist/*.dmg
+            dist/*.zip
             dist/*.exe
 
   release:
@@ -62,8 +71,9 @@ jobs:
             --repo "${{ github.repository }}" \
             --title "鹦鹉桌宠 ${{ github.ref_name }}" \
             --notes "下载说明：
-          - **Mac（M1/M2/M3/M4 等 Apple 芯片）**：ParrotPet-*-mac-arm64.dmg
-          - **Mac（Intel 芯片）**：ParrotPet-*-mac-x64.dmg
+          - **Mac（M1/M2/M3/M4 等 Apple 芯片）**：ParrotPet-*-mac-arm64（.dmg 或 .zip）
+          - **Mac（Intel 芯片）**：ParrotPet-*-mac-x64（.dmg 或 .zip）
+          - .zip 版：双击解压，把"鹦鹉桌宠"拖进"应用程序"文件夹
           - **Windows**：ParrotPet-*-win-x64.exe
 
           第一次打开：

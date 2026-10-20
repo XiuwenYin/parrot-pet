@@ -147,13 +147,14 @@ const SPECIES = {
   cockatielWhiteface: {
     name: '白面玄凤',
     shape: 'cockatiel',
+    // 雪白的脸和冠羽 + 冷调蓝灰身体 + 深炭灰飞羽和尾巴；白脸边缘收清楚，加一点粉腮红，免得像黑白照片
     palette: {
-      body: '#9A9EA2', bodyDark: '#6E7377', belly: '#B4B7BA',
-      wing: '#8C9095', wingEdge: '#5E6266', flight: '#5E6266', wingBar: '#F4F2EC',
-      rump: '#8E9296', tail: '#6E7276',
-      head: '#B0B2B4', face: '#F4F4F2', forehead: '#FFFFFF', crest: '#E6E6E4', cheekSpot: null,
-      beak: '#A4A4A2', beakDark: '#7E7E7C',
-      eye: '#1B1B1B', eyeRing: null, feet: '#9E9392',
+      body: '#8E98A6', bodyDark: '#626C7A', belly: '#C7CED8',
+      wing: '#848E9C', wingEdge: '#525A66', flight: '#3F4650', wingBar: '#FFFFFF',
+      rump: '#8A94A2', tail: '#4A515C',
+      head: '#E3E7ED', face: '#FCFBF8', forehead: '#FFFFFF', crest: '#D4DAE2', cheekSpot: null,
+      beak: '#A9B0BB', beakDark: '#7E8692',
+      eye: '#1B1B1B', eyeRing: null, feet: '#D3AFAA', cheek: '#F7A3B6', faceSoft: 'soft1',
     },
   },
   // ---------- 和尚鹦鹉 ----------
