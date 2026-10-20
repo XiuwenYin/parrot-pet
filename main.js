@@ -107,7 +107,7 @@ function setSetting(key, value) {
     const h = Math.round(BASE_H * scale);
     // 保持脚底位置不变
     const [, oldH] = win.getSize();
-    win.setBounds({ x, y: y + oldH - h, width: w, height: h });
+    win.setBounds({ x: toInt(x), y: toInt(y + oldH - h), width: w, height: h });
     win.webContents.setZoomFactor(scale);
   }
   send('settings', settings);
@@ -221,9 +221,14 @@ function listRealAssets(species) {
   return result;
 }
 
+// 窗口坐标必须是 32 位整数：-0（比如 Math.round(-0.3)）和越界的数都会让 Electron 直接报错
+const toInt = (v) => (Number.isFinite(v) ? Math.max(-1e6, Math.min(1e6, Math.round(v))) || 0 : null);
+
 ipcMain.on('move', (_e, x, y) => {
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-  if (win && !win.isDestroyed()) win.setPosition(Math.round(x), Math.round(y));
+  const ix = toInt(x);
+  const iy = toInt(y);
+  if (ix === null || iy === null) return;
+  if (win && !win.isDestroyed()) win.setPosition(ix, iy);
 });
 
 ipcMain.on('set-ignore-mouse', (_e, ignore) => {

@@ -157,15 +157,66 @@ const POSES = {
     p.sy = 1 + 0.015 * Math.sin(t * 2.4);
   },
 
+  // 犯困（眼皮越来越沉、脑袋一点一点）→ 慢慢把头转到背后埋进羽毛 → 睡着（单脚站、呼吸慢）
   sleep(t, s, p) {
     p.crest = 0;
-    headToBack(p, 1.05);
+    const DROWSY = 2.6, TUCK = 1.0;
+    if (t < DROWSY) {
+      const k = t / DROWSY;
+      const nod = Math.pow(Math.max(0, Math.sin(t * TAU * 0.85)), 4);
+      p.eye = Math.max(0.12, 1 - 0.8 * k - 0.35 * nod * k);
+      p.headRot = 4 + 10 * k + 16 * nod * k;
+      p.headY = 3 * nod * k;
+      p.puff = 1 + 0.06 * k;
+      p.crest = 0.35 * (1 - k);
+      return;
+    }
+    const k = Math.min(1, (t - DROWSY) / TUCK);
+    const e = k * k * (3 - 2 * k);
+    // 从犯困的低头姿势插值到"头埋到背后"
+    p.headFlip = 1 - 2 * e;
+    p.headRot = 14 + (-18.9 - 14) * e;
+    p.headX = -14.7 * e;
+    p.headY = 18.9 * e;
     p.puff = 1.06;
-    p.headPuff = 1.04;
-    p.eye = 0.08;
-    p.sy = 1 + 0.025 * Math.sin(t * TAU / 4);
-    p.legR = 14;           // 单脚站着睡
-    p.legRX = -4;
+    p.headPuff = 1 + 0.04 * e;
+    p.eye = 0.12 - 0.04 * e;
+    p.sy = 1 + 0.025 * Math.sin(t * TAU / 4) * e;
+    // 埋好头之后才把一只脚收进肚子
+    const leg = Math.max(0, (t - DROWSY - TUCK) / 0.6);
+    p.legR = 14 * Math.min(1, leg);
+    p.legRX = -4 * Math.min(1, leg);
+  },
+
+  // 醒来：头从背上抬出来 → 迷糊地眨眼 → 打哈欠、伸翅膀 → 抖抖羽毛
+  wake(t, s, p) {
+    const out = Math.min(1, t / 0.7);
+    const e = out * out * (3 - 2 * out);
+    p.headFlip = -1 + 2 * e;
+    p.headRot = -18.9 + (18.9 - 6) * e;
+    p.headX = -14.7 * (1 - e);
+    p.headY = 18.9 * (1 - e);
+    p.puff = 1.06 - 0.06 * e;
+    p.crest = 0.5 * e;
+    p.eye = t < 0.7 ? 0.1 : 0.4 + 0.45 * Math.abs(Math.sin((t - 0.7) * TAU * 1.6));
+    // 打哈欠
+    if (t > 0.9 && t < 1.7) {
+      const y = Math.sin(Math.PI * (t - 0.9) / 0.8);
+      p.jaw = 24 * y;
+      p.headRot -= 14 * y;
+      p.eye = Math.min(p.eye, 1 - 0.8 * y);
+    }
+    // 伸一下翅膀
+    if (t > 1.2 && t < 2.0) p.wing = 42 * Math.sin(Math.PI * (t - 1.2) / 0.8);
+    // 抖羽毛
+    if (t > 2.0) {
+      const k = Math.min(1, (t - 2.0) / 0.7);
+      p.puff = 1 + 0.12 * (1 - k);
+      p.rot = 7 * Math.sin(t * TAU * 9) * (1 - k);
+      p.headRot += 8 * Math.sin(t * TAU * 9 + 1) * (1 - k);
+      p.eye = 1;
+      p.crest = 0.5 + 0.4 * (1 - k);
+    }
   },
 
   happy(t, s, p) {

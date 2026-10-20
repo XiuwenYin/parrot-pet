@@ -33,6 +33,34 @@
   let traits = FAMILIES.lovebird;
   let hopT = 1;           // 点击时的小跳
   let flipAngle = 0;      // 倒挂时舞台的旋转角度（慢慢转过去）
+  // ---- 动作衔接：换动作时从当前姿势过渡过去，加上惯性、转身、落地缓冲 ----
+  let shownPose = null;   // 上一帧实际画出来的姿势
+  let blendFrom = null;   // 过渡起点
+  let blendT = 1;
+  let blendDur = 0.35;
+  let shownDir = -1;      // 画面上的朝向（-1..1，转身时从一边压扁翻到另一边）
+  let lean = 0;           // 惯性前倾（弹簧）
+  let leanV = 0;
+  let velX = 0;
+  let lastX = null;
+  let landT = 1;          // 落地压一下
+  // 各动作的过渡时长（秒）；被抓、被扔、受惊这类要快，睡觉醒来要慢
+  const BLEND = {
+    drag: 0.12, thrown: 0.15, bite: 0.1, nibble: 0.1, hiss: 0.12, fright: 0.12, angry: 0.15,
+    fly: 0.22, flutter: 0.2, peekaboo: 0.2, happy: 0.3, sleep: 0.7, wake: 0.4, gnaw: 0.3,
+  };
+  const ease = (x) => x * x * (3 - 2 * x);
+  const AIRBORNE = ['fly', 'flutter', 'thrown', 'hang', 'drag', 'gnaw'];
+  function mixPose(a, b, k) {
+    const o = {};
+    for (const key in b) {
+      const va = a[key], vb = b[key];
+      if (typeof vb === 'number' && typeof va === 'number' && key !== 'tailPaper' && key !== 'twigPile') o[key] = va + (vb - va) * k;
+      else if (typeof vb === 'boolean') o[key] = k < 0.5 ? va : vb;
+      else o[key] = vb;
+    }
+    return o;
+  }
   let lastInteract = performance.now();
 
   // ---------- 外观 ----------
@@ -232,12 +260,23 @@
         if (s.poll <= 0) { api.getEnv().then(e => { env = e; }); s.poll = 0.15; }
       },
     },
+    // 犯困 → 打盹点头 → 把头埋进背上的羽毛 → 睡着；睡够了醒来
     sleep: {
-      dur: [12, 30], w: 0.7,
+      dur: [14, 32], w: 0.7,
       update(dt, s) {
+        if (cur.t < 3.6) return;   // 还在犯困、埋头
         s.z = (s.z || 0) - dt;
         if (s.z <= 0) { fx('Z', { cls: 'zzz', dx: dir > 0 ? -40 : 40, size: 16 + Math.random() * 8, life: 2400 }); s.z = 1.1; }
       },
+      next() {
+        const h = new Date().getHours();
+        if (traits.nightFright && (h >= 23 || h < 7) && Math.random() < 0.25) setState('fright');
+        else setState('wake');
+      },
+    },
+    // 醒来：把头从背上抬出来 → 迷糊眨眼 → 打哈欠伸翅膀 → 抖抖羽毛
+    wake: {
+      dur: [2.9, 2.9], w: 0,
     },
     hang: {
       dur: [5, 10], w: 0.6,
@@ -474,7 +513,10 @@
     const prev = BEHAVIORS[cur.id];
     if (prev && prev.exit && cur.id !== id) prev.exit(cur.s);
     const [a, z] = b.dur;
+    const prevId = cur.id;
     cur = { id, t: 0, dur: opts.dur || rand(a, z), s: { seed: Math.random(), ...opts } };
+    if (shownPose) { blendFrom = shownPose; blendT = 0; blendDur = opts.blend ?? BLEND[id] ?? 0.35; }
+    if (['fly', 'flutter', 'thrown'].includes(prevId) && !AIRBORNE.includes(id)) landT = 0;
     if (b.enter) b.enter(cur.s);
     if (lines(id) && !opts.quiet && Math.random() < 0.55 && !['dizzy', 'talk', 'whistle'].includes(id)) say(pickOne(lines(id)));
   }
@@ -664,7 +706,7 @@
     const now = performance.now();
     clickTimes.push(now);
     while (clickTimes.length && now - clickTimes[0] > 2500) clickTimes.shift();
-    if (cur.id === 'sleep') { setState('idle', { quiet: true }); say(pickOne(lines('wake'))); return; }
+    if (cur.id === 'sleep') { setState('wake', { quiet: true }); say(pickOne(lines('wake'))); return; }
     if (clickTimes.length >= 5) { clickTimes.length = 0; if (onGround()) setState('angry'); say(pickOne(lines('angry'))); return; }
     Sound.chirp(2);
     say(pickOne(lines('click')), 1600);
@@ -754,13 +796,47 @@
     if (family !== 'cockatiel') p.crest = 0;
     if (hopT < 0.3) { hopT += dt; p.y += -Math.sin((hopT / 0.3) * Math.PI) * 10; }
 
+    // 1) 换动作的过渡：从上一帧的姿势缓入缓出到新动作
+    let q = p;
+    if (blendFrom && blendT < 1) {
+      blendT = Math.min(1, blendT + (dt || 0) / blendDur);
+      q = mixPose(blendFrom, p, ease(blendT));
+    }
+    shownPose = q;
+    q = { ...q };
+    // 2) 惯性：按水平速度前倾，弹簧带一点回弹（急停时身子往前晃一下再站稳，尾巴跟着甩）
+    if (lastX === null) lastX = pos.x;
+    if (dt > 0) {
+      const prevVel = velX;
+      velX += ((pos.x - lastX) / dt - velX) * Math.min(1, dt * 6);
+      const accel = (velX - prevVel) / dt;
+      const free = !['drag', 'thrown', 'hang', 'bite', 'fly', 'flutter', 'gnaw', 'peekaboo'].includes(cur.id);
+      // 匀速时微微前倾；减速（急停）时身子还想往前冲 → 前倾更多，然后弹簧回弹站稳
+      const target = free ? Math.max(-12, Math.min(12, (velX * 0.04 - accel * 0.012) * dir / scale())) : 0;
+      leanV += (120 * (target - lean) - 8 * leanV) * dt;
+      lean += leanV * dt;
+    }
+    lastX = pos.x;
+    q.rot += lean;
+    q.tail -= lean * 1.6;
+    // 3) 落地：压一下再弹回
+    if (landT < 0.32) {
+      landT += dt;
+      const k = Math.sin(Math.PI * Math.min(1, landT / 0.32));
+      q.sy *= 1 - 0.11 * k;
+      q.sx *= 1 + 0.07 * k;
+    }
+    // 4) 转身：不瞬间镜像，横向压扁再翻过去
+    shownDir += Math.sign(dir - shownDir) * Math.min(Math.abs(dir - shownDir), (dt || 0) * 11);
+    const sdx = Math.abs(shownDir) < 0.04 ? 0.04 * Math.sign(dir) : shownDir;
+
     // 倒挂/翻回来都转过去，不一下子跳
     const flipTarget = cur.id === 'hang' ? 180 : 0;
     flipAngle += Math.sign(flipTarget - flipAngle) * Math.min(Math.abs(flipTarget - flipAngle), 540 * dt);
-    stage.style.transform = (flipAngle ? `rotate(${flipAngle.toFixed(1)}deg) ` : '') + `scaleX(${dir})`;
+    stage.style.transform = (flipAngle ? `rotate(${flipAngle.toFixed(1)}deg) ` : '') + `scaleX(${sdx.toFixed(3)})`;
     bubble.classList.toggle('below', flipAngle > 90);
-    if (useReal) real.draw(cur.id, cur.t, p, cur.s.seed);
-    else applyCartoon(p);
+    if (useReal) real.draw(cur.id, cur.t, q, cur.s.seed);
+    else applyCartoon(q);
 
     if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y)) {
       console.warn('位置异常，重置', cur.id, pos.x, pos.y);
@@ -787,6 +863,6 @@
   say(pickOne(lines('click')) + ' 我是' + (SPECIES[settings.species] || SPECIES.roseicollis).name, 2500);
   requestAnimationFrame(frame);
 
-  if (MOCK) window.__petDebug = { setState, cur: () => cur, pause: (v) => { paused = v; }, at: (id, t) => { setState(id, { quiet: true, dur: 99 }); cur.t = t; paused = true; } };
+  if (MOCK) window.__petDebug = { setState, cur: () => cur, pose: () => shownPose, dir: () => shownDir, inertia: () => ({ lean, velX, x: pos.x, dir }), pause: (v) => { paused = v; }, at: (id, t) => { setState(id, { quiet: true, dur: 99 }); cur.t = t; paused = true; } };
   if (MOCK) buildMockPanel(startAction, async (k, v) => { settings = { ...settings, [k]: v }; await applySettings(); });
 })();

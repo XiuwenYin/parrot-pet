@@ -30,6 +30,7 @@ const REAL_FALLBACK = {
   hiss: ['hiss', 'angry', 'idle'],
   fright: ['fright', 'fly', 'idle'],
   peekaboo: ['peekaboo', 'look', 'idle'],
+  wake: ['wake', 'stretch', 'idle'],
   bite: ['bite', 'angry', 'idle'],
   hang: ['hang', 'idle'],
   gnaw: ['gnaw', 'eat', 'fly', 'idle'],

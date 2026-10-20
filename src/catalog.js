@@ -270,6 +270,7 @@ const ACTIONS = [
   { id: 'nibble', name: '轻轻啄一下', menu: false },
   { id: 'hiss', name: '哈气', menu: false },
   { id: 'fright', name: '夜惊', menu: false },
+  { id: 'wake', name: '醒来', menu: false },
 ];
 
 const SIZES = [
