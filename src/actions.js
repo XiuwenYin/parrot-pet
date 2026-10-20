@@ -1,7 +1,8 @@
 // 每个动作的姿态函数：(t 秒, s 动作状态, pose) → 改 pose。只管"长什么样"，不管位置移动。
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const GNAW_HEAD = 34;   // 啃的时候头往下压的角度；对准用的就是这个姿态
+const GNAW_HEAD = 34;
+const EAT_CYCLE = 1.6;  // 吃瓜子一轮的时长（pet.js 用它对齐咔嚓声和掉壳）   // 啃的时候头往下压的角度；对准用的就是这个姿态
 
 // 每 ~3.5 秒眨一次眼
 function blink(t, seed = 0) {
@@ -57,14 +58,31 @@ const POSES = {
     if (s.phase === 'land') { p.wing = 130 + 15 * Math.sin(t * TAU * 10); p.tuckFeet = false; p.rot = -10; }
   },
 
+  // 吃瓜子：俯身 → 啄 → 叼起来坐回 → 嗑（嘴快速开合、头小晃）→ 再俯身。每轮 EAT_CYCLE 秒，全身都参与
   eat(t, s, p) {
-    const peck = Math.pow(Math.max(0, Math.sin(t * TAU * 1.6)), 3);
     p.seeds = true;
-    p.rot = 14;
-    p.headRot = 28 + 22 * peck;
-    p.headY = 4 * peck;
-    p.jaw = 10 * Math.abs(Math.sin(t * TAU * 3.2));
-    p.eye = blink(t, s.seed);
+    const c = t % EAT_CYCLE;
+    const sm = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+    let down;                                   // 0 = 坐直，1 = 俯身到底
+    if (c < 0.45) down = sm(c / 0.45);
+    else if (c < 0.6) down = 1;
+    else if (c < 0.95) down = 1 - sm((c - 0.6) / 0.35);
+    else down = 0;
+    const jab = c >= 0.45 && c < 0.6 ? Math.sin((c - 0.45) / 0.15 * Math.PI) : 0;
+    const chew = c >= 0.95 ? 1 : 0;
+    p.rot = 3 + 20 * down;
+    p.headRot = -6 + 56 * down + 10 * jab + chew * 4 * Math.sin(t * TAU * 2.2);
+    p.headY = 3 * down + 2 * jab;
+    p.headX = 2 * down;
+    p.sy = 1 - 0.05 * down + chew * 0.012 * Math.sin(t * TAU * 7);
+    p.sx = 1 + 0.03 * down;
+    p.tail = 14 * down;                         // 俯身时尾巴翘起来
+    p.wing = 6 * down;
+    p.legL = 0; p.legR = 0;
+    p.jaw = chew ? 11 * Math.abs(Math.sin(t * TAU * 6.5)) : 8 * jab;
+    p.eye = chew ? 0.82 + 0.18 * blink(t, s.seed) : blink(t, s.seed);
+    // 每隔一轮挪一下脚
+    if (Math.floor(t / EAT_CYCLE) % 2 === 1 && c > 1.1 && c < 1.4) p.legL = 4 * Math.sin((c - 1.1) / 0.3 * Math.PI);
   },
 
   preen(t, s, p) {

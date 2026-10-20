@@ -69,6 +69,11 @@ html, body {
 .fx.zzz { color: #7a8bb0; animation: drift 2.4s ease-out forwards; }
 .fx.pop { animation: pop 1.2s ease-out forwards; }
 .fx.orbit { animation: orbit 1.6s linear forwards; }
+.fx.husk { color: #8a7052; animation: husk 0.9s ease-in forwards; }
+@keyframes husk {
+  from { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  to { transform: translate(6px, 46px) rotate(200deg); opacity: 0.2; }
+}
 
 @keyframes rise {
   from { transform: translate(0, 0) scale(0.6); opacity: 0; }

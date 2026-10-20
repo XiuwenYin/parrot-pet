@@ -29,6 +29,11 @@ jobs:
       - name: 编译 Mac 小工具（找鸟、抽帧、窗口位置）
         if: runner.os == 'macOS'
         run: zsh tools/build_helpers.sh
+      - name: 停掉 XProtect（GitHub 的 Mac 机器上它会占着新做的 dmg，导致卸载失败）
+        if: runner.os == 'macOS'
+        run: |
+          sudo pkill -9 XProtect >/dev/null || true
+          while pgrep XProtect; do sleep 3; done
       - name: 打包
         run: npx electron-builder ${{ matrix.target }} --publish never
         env:

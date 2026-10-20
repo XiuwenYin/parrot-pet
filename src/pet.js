@@ -211,12 +211,13 @@
     eat: {
       dur: [4, 8], w: 1.5,
       update(dt, s) {
-        // 和 actions.js 里 eat 的啄击节奏一致（1.6 次/秒，sin 波峰时嘴碰到瓜子）
-        const k = Math.floor(cur.t * 1.6 - 0.25);
-        if (k !== s.peck) {
-          s.peck = k;
-          if (k >= 0 && Math.random() < 0.75) Sound.crack();
-        }
+        // 和 actions.js 里 eat 的节奏对齐：每轮在"嗑"开始和中间各咔嚓一声，嗑完掉一片壳
+        const c = cur.t % EAT_CYCLE;
+        const k = Math.floor(cur.t / EAT_CYCLE);
+        if (k !== s.cycle) { s.cycle = k; s.hits = 0; }
+        if (s.hits === 0 && c > 1.0) { s.hits = 1; Sound.crack(); }
+        if (s.hits === 1 && c > 1.25) { s.hits = 2; if (Math.random() < 0.7) Sound.crack(); }
+        if (s.hits === 2 && c > 1.45) { s.hits = 3; fx('●', { cls: 'husk', dx: dir > 0 ? 34 : -34, dy: 56, size: 5, life: 900 }); }
       },
     },
     preen: { dur: [3, 6], w: 1.5 },
