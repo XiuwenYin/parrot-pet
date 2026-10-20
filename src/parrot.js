@@ -28,6 +28,15 @@ const SHAPES = {
   // 和尚：敦实——大头、胸脯饱满、身子宽，尾巴中等偏宽；灰脸灰胸带鳞片纹
   monk: { head: { s: 1.06, y: 84 }, body: { cx: 97, cy: 136, rx: 51, ry: 48 }, wing: { sx: 1, sy: 1.02 },
     beak: { s: 0.95, dx: -1, dy: 1 }, tail: 'mid', scale: { x: 1.03, y: 0.97 }, legTop: 172, breastScallops: true },
+  // 葵花凤头：大个子、通体白；一大撮往前卷的黄冠羽，深色大嘴，眼圈一圈淡蓝白的裸皮，耳羽一抹淡黄
+  cockatoo: { head: { s: 1.0, y: 78 }, body: { cx: 99, cy: 132, rx: 50, ry: 52 }, wing: { sx: 1, sy: 1.06 }, ringR: 10.5,
+    beak: { s: 1.1, dx: 0, dy: 1 }, tail: 'mid', scale: { x: 1.08, y: 1.08 }, legTop: 171, crest: 'cockatoo', cheekSpot: true },
+  // 凯克：矮壮、大圆头、短方尾；白肚子、黄大腿
+  caique: { head: { s: 1.03, y: 84 }, body: { cx: 98, cy: 136, rx: 50, ry: 47 }, wing: { sx: 0.98, sy: 0.98 },
+    beak: { s: 0.9, dx: 0, dy: 2 }, tail: 'short', scale: { x: 1.02, y: 0.96 }, legTop: 172, thighs: true },
+  // 非洲灰：一身灰色鳞片纹、眼睛周围一大圈白色裸皮、浅黄眼珠、黑嘴、短短的大红尾巴
+  grey: { head: { s: 1.0, y: 80 }, body: { cx: 98, cy: 133, rx: 47, ry: 50 }, wing: { sx: 1, sy: 1.04 }, ringR: 12.5,
+    beak: { s: 1.04, dx: 0, dy: 1 }, tail: 'short', scale: { x: 1.03, y: 1.03 }, legTop: 171, breastScallops: true },
 };
 
 // k<0 变暗，k>0 变亮
@@ -78,6 +87,20 @@ function parrotSVG(shapeId, p) {
   </g>`;
   })();
 
+  // 单脚抓着吃（大中型鹦鹉的习惯）：大腿从肚子前抬起，脚举到嘴下面，脚趾攥着一颗坚果
+  const holdLeg = (() => {
+    const R = 36 * S.head.s;
+    const fx = 138, fy = S.head.y + R * 1.0;
+    const tx = B.cx + B.rx * 0.78, ty = B.cy - B.ry * 0.3;     // 大腿藏在胸前羽毛里，只露一小截脚
+    const kx = B.cx + B.rx + 2, ky = ty - (ty - fy) * 0.4;
+    return `<g id="footHold">
+    <path d="M${tx + 5},${ty - 2} Q${kx},${ty - 3} ${kx},${ky} L${fx - 2},${fy + 4}" stroke="${p.feet}" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <ellipse cx="${fx + 2}" cy="${fy - 3}" rx="6.5" ry="5" fill="#B98A55" stroke="#7D5A33" stroke-width="0.9"/>
+    <path d="M${fx - 3},${fy + 2} Q${fx + 2},${fy - 9} ${fx + 8},${fy - 6} M${fx - 3},${fy + 2} Q${fx + 4},${fy + 3} ${fx + 9},${fy} M${fx - 3},${fy + 2} Q${fx - 6},${fy - 4} ${fx - 3},${fy - 8}"
+          stroke="${p.feet}" stroke-width="2.8" stroke-linecap="round" fill="none"/>
+  </g>`;
+  })();
+
   const TAILS = {
     short: `<path d="M72,158 L40,181 Q43,191 54,187 L84,170 Z" fill="url(#tailGrad)" ${line(p.tail)}/>
        <path d="M70,166 L48,184" stroke="${shade(p.tail, -0.35)}" stroke-width="1" opacity="0.4"/>`,
@@ -92,12 +115,33 @@ function parrotSVG(shapeId, p) {
   const tail = TAILS[S.tail] || TAILS.short;
 
   // 冠羽（玄凤）：三根弯羽毛，转轴在头顶，crest 参数决定竖起多少
-  const crestSide = S.crest ? `<g id="crest">
+  // 葵花凤头的冠：五根宽羽，从头顶长出、尖端往前卷；放下时贴在后脑，只露出翘起的黄尖
+  const cockatooFeathers = (front) => [0, 1, 2, 3, 4].map((i) => {
+    const c = p.crest || '#F5D24A';
+    if (front) {
+      const a = (i - 2) * 16, bx = 114 + (i - 2) * 5, by = 44, h = 40 - Math.abs(i - 2) * 6;
+      return `<path d="M${bx - 5},${by} C${bx - 7},${by - h * 0.6} ${bx - 2},${by - h} ${bx + 4},${by - h - 2} C${bx + 2},${by - h * 0.6} ${bx + 5},${by - h * 0.3} ${bx + 5},${by} Z"
+        transform="rotate(${a} ${bx} ${by})" fill="${shade(c, (i % 2) * 0.08)}" ${line(c)}/>`;
+    }
+    const bx = 104 + i * 5, by = 47 - i * 0.6, h = 46 - i * 5;
+    return `<path d="M${bx - 5},${by} C${bx - 14},${by - h * 0.55} ${bx - 8},${by - h * 1.02} ${bx + 14},${by - h * 0.9} C${bx + 4},${by - h * 0.8} ${bx + 2},${by - h * 0.45} ${bx + 6},${by} Z"
+      fill="${shade(c, (i % 2) * 0.08 - 0.03 * i)}" ${line(c)}/>`;
+  }).join('');
+  // 平时：一根"蒜苗"——几根冠羽并成一束，从额头往后上方翘着；激动时才炸开成扇形
+  const cc = p.crest || '#F5D24A';
+  const crestSide = S.crest === 'cockatoo' ? `<g id="crest">
+      <g id="crestRest">
+        <path d="M134,46 C128,30 114,15 94,6 C100,14 106,22 110,30 C104,28 98,28 94,30 C104,32 112,38 116,47 Z" fill="${cc}" ${line(cc)}/>
+        <path d="M128,40 C122,30 112,20 100,12" stroke="${shade(cc, 0.25)}" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.8"/>
+      </g>
+      <g id="crestFan">${cockatooFeathers(false)}</g></g>` : S.crest ? `<g id="crest">
       <path d="M120,48 C114,30 104,16 92,8 C104,12 116,22 126,40 Z" fill="${p.crest || p.face}" ${line(p.crest || p.face)}/>
       <path d="M116,48 C106,34 94,26 82,22 C96,22 110,30 122,44 Z" fill="${shade(p.crest || p.face, -0.06)}" ${line(p.crest || p.face)}/>
       <path d="M124,46 C122,30 116,18 108,10 C118,16 126,28 130,42 Z" fill="${shade(p.crest || p.face, 0.08)}" ${line(p.crest || p.face)}/>
     </g>` : '';
-  const crestFront = S.crest ? `<g id="crestFront">
+  const crestFront = S.crest === 'cockatoo' ? `<g id="crestFront">
+      <g id="crestRestFront"><path d="M106,44 C104,30 108,16 116,4 C118,16 122,30 122,44 Z" fill="${cc}" ${line(cc)}/></g>
+      <g id="crestFanFront">${cockatooFeathers(true)}</g></g>` : S.crest ? `<g id="crestFront">
       <path d="M110,44 C106,28 104,16 98,6 C108,14 114,28 116,42 Z" fill="${p.crest || p.face}" ${line(p.crest || p.face)}/>
       <path d="M118,42 C120,26 124,16 130,6 C130,18 126,30 122,44 Z" fill="${shade(p.crest || p.face, 0.06)}" ${line(p.crest || p.face)}/>
       <path d="M114,42 C113,26 114,12 114,2 C118,14 118,28 117,42 Z" fill="${shade(p.crest || p.face, -0.05)}" ${line(p.crest || p.face)}/>
@@ -348,6 +392,7 @@ function parrotSVG(shapeId, p) {
       <ellipse cx="${B.cx - 2}" cy="${B.cy + B.ry}" rx="${B.rx}" ry="14" fill="${shade(p.body, -0.3)}" opacity="0.22" filter="url(#soft3)"/>
     </g>
     ${breast}
+    ${S.thighs ? `<ellipse cx="${B.cx + 6}" cy="${B.cy + B.ry * 0.74}" rx="17" ry="9" fill="${p.thigh || p.belly}" opacity="0.95" filter="url(#soft3)"/>` : ''}
   </g>
 
   ${NS ? '' : collar}
@@ -390,6 +435,7 @@ function parrotSVG(shapeId, p) {
     <g id="eye">
       ${ring}
       <ellipse cx="128" cy="70" rx="5.6" ry="6.3" fill="${p.eye}"/>
+      ${p.pupil ? `<circle cx="128.6" cy="70.4" r="2.9" fill="${p.pupil}"/>` : ''}
       <circle cx="130.2" cy="67.2" r="2.3" fill="#fff"/>
       <circle cx="126.4" cy="72.6" r="1" fill="#fff" opacity="0.8"/>
     </g>
@@ -426,6 +472,7 @@ function parrotSVG(shapeId, p) {
       ${p.eyeRing ? `<circle cx="99" cy="71" r="8.5" fill="${p.eyeRing}"/><circle cx="129" cy="71" r="8.5" fill="${p.eyeRing}"/>` : ''}
       <ellipse cx="99" cy="71" rx="5.4" ry="6.1" fill="${p.eye}"/>
       <ellipse cx="129" cy="71" rx="5.4" ry="6.1" fill="${p.eye}"/>
+      ${p.pupil ? `<circle cx="99" cy="71.4" r="2.8" fill="${p.pupil}"/><circle cx="129" cy="71.4" r="2.8" fill="${p.pupil}"/>` : ''}
       <circle cx="101" cy="68.2" r="2.2" fill="#fff"/>
       <circle cx="131" cy="68.2" r="2.2" fill="#fff"/>
       <circle cx="97.4" cy="73.6" r="0.9" fill="#fff" opacity="0.8"/>
@@ -448,6 +495,7 @@ function parrotSVG(shapeId, p) {
   </g>
 
   ${scratchLeg}
+  ${holdLeg}
   </g>
 </g>`;
 }
@@ -486,7 +534,7 @@ function basePose() {
     wing: 0, jaw: 0, eye: 1, happyEyes: false, xEyes: false, blush: 0,
     legL: 0, legR: 0, legRX: 0, tuckFeet: false, tail: 0,
     seeds: false, paperGround: false, beakPaper: false, tailPaper: 0,
-    shadow: 1, scratchFoot: 0, front: false,
+    shadow: 1, scratchFoot: 0, holdFoot: false, front: false,
     legExt: 0,              // 伸长腿：0 平常，1 腿全伸直（藏在羽毛里的"大长腿"露出来）
     legLX: 0,               // 远处那只脚往前/后迈的距离
     crest: 0.35,            // 冠羽：0 贴在后脑，1 完全竖起
@@ -511,6 +559,8 @@ function makeCartoon(svg, shapeId) {
     crest: $('crest'), crestFront: $('crestFront'),
     upper: $('upper'), upperBack: $('upperBack'), legLineL: $('legLineL'), legLineR: $('legLineR'),
     mirror: $('mirror'), beakTwig: $('beakTwig'), twigGround: $('twigGround'),
+    footHold: $('footHold'),
+    crestRest: $('crestRest'), crestFan: $('crestFan'), crestRestFront: $('crestRestFront'), crestFanFront: $('crestFanFront'),
     neckFill: $('neckFill'), neckSil: $('neckSil'), headSil: $('headSil'), headFeat: $('headFeat'),
     neckGrad: svg.querySelector('radialGradient[id^="neckGrad"]'),
   };
@@ -603,8 +653,16 @@ function makeCartoon(svg, shapeId) {
     show(els.eyeX, p.xEyes);
     // 冠羽：0 往后贴，1 竖直
     const c = Math.max(0, Math.min(1, p.crest));
-    if (els.crest) els.crest.setAttribute('transform', `rotate(${-62 + 66 * c} ${P.crest[0]} ${P.crest[1]})`);
-    if (els.crestFront) els.crestFront.setAttribute('transform', `translate(114 44) scale(1 ${0.35 + 0.65 * c}) translate(-114 -44)`);
+    if (SH.crest === 'cockatoo') {
+      // 激动（crest 拉满：尖叫、蹦迪、炸毛、受惊）才炸开：扇形冠羽从后往前竖起来；平时只是一根蒜苗，稍微跟着翘一翘
+      const fan = Math.max(0, Math.min(1, (c - 0.9) / 0.1));
+      show(els.crestRest, fan < 0.15); show(els.crestRestFront, fan < 0.15);
+      show(els.crestFan, fan >= 0.15); show(els.crestFanFront, fan >= 0.15);
+      els.crestFan.setAttribute('transform', `rotate(${-70 + 85 * fan} ${P.crest[0]} ${P.crest[1] + 4})`);
+      els.crestRest.setAttribute('transform', `rotate(${-20 + 14 * Math.min(1, c / 0.6)} 120 46)`);
+      if (els.crestFanFront) els.crestFanFront.setAttribute('transform', `translate(114 44) scale(${0.4 + 0.6 * fan}) translate(-114 -44)`);
+    } else if (els.crest) els.crest.setAttribute('transform', `rotate(${-62 + 66 * c} ${P.crest[0]} ${P.crest[1]})`);
+    if (els.crestFront && SH.crest !== 'cockatoo') els.crestFront.setAttribute('transform', `translate(114 44) scale(1 ${0.35 + 0.65 * c}) translate(-114 -44)`);
     // 腮红常驻淡淡一层，开心时更红
     els.blush.setAttribute('opacity', 0.3 + 0.55 * p.blush);
     // 伸长腿：上半身抬高，腿线跟着拉长，脚趾不动
@@ -615,7 +673,8 @@ function makeCartoon(svg, shapeId) {
     els.legLineR.setAttribute('d', `M104,${LEG_TOP + 1 - lift} L104.5,183`);
     els.footL.setAttribute('transform', `translate(${p.legLX} ${-p.legL})`);
     els.footR.setAttribute('transform', `translate(${p.legRX} ${-p.legR})`);
-    show(els.footR, !p.scratchFoot);
+    show(els.footR, !p.scratchFoot && !p.holdFoot);
+    show(els.footHold, !!p.holdFoot);
     show(els.footFront, !!p.scratchFoot);
     if (p.scratchFoot) els.footFront.setAttribute('transform', `translate(${p.scratchFoot} ${-Math.abs(p.scratchFoot) * 0.6})`);
     show(els.feet, !p.tuckFeet);

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+  <title>名字</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #f6f4ef; --card: #fff; --text: #2b2b2b; --muted: #777; --line: #ddd8cc; --accent: #4f8f4a; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #1f1f1d; --card: #2a2a27; --text: #ecebe6; --muted: #a3a29b; --line: #44433e; --accent: #7cc56f; } }
+    body { margin: 0; padding: 20px 22px; background: var(--bg); color: var(--text); font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    h1 { font-size: 17px; margin: 0 0 4px; }
+    p.note { color: var(--muted); margin: 0 0 14px; font-size: 12.5px; }
+    label { display: block; margin: 12px 0 4px; font-size: 13px; }
+    input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; }
+    .bar { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    button { padding: 7px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); font: inherit; cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  </style>
+</head>
+<body>
+  <h1>名字</h1>
+  <p class="note">告诉它你叫什么，再给它起个名字。它会用这些名字跟你打招呼，学舌的时候也会喊你。</p>
+  <label for="user">你叫什么</label>
+  <input id="user" maxlength="12" placeholder="比如：小文">
+  <label for="pet" id="petLabel">它叫什么</label>
+  <input id="pet" maxlength="12" placeholder="比如：豆豆">
+  <div class="bar"><button id="close">取消</button><button id="save" class="primary">好了</button></div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    (async () => {
+      const v = await window.names.get();
+      $('user').value = v.userName || '';
+      $('pet').value = v.petName || '';
+      $('petLabel').textContent = `这只${v.speciesName}叫什么`;
+      $('user').focus();
+    })();
+    const save = async () => { await window.names.save({ userName: $('user').value.trim(), petName: $('pet').value.trim() }); window.close(); };
+    $('save').onclick = save;
+    document.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') window.close(); });
+    $('close').onclick = () => window.close();
+  </script>
+</body>
+</html>

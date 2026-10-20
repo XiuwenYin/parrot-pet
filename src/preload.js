@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('pet', {
   showMenu: () => ipcRenderer.send('context-menu'),
   customSound: (name) => ipcRenderer.invoke('custom-sound', name),
   gnawTarget: (near) => ipcRenderer.invoke('gnaw-target', near),
+  perchTarget: (near) => ipcRenderer.invoke('perch-target', near),
   desk: (cmd, arg) => ipcRenderer.send('desk', cmd, arg),
   onMenu: (fn) => ipcRenderer.on('menu-cmd', (_e, cmd, arg) => fn(cmd, arg)),
 });

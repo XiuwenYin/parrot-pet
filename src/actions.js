@@ -143,6 +143,24 @@ const POSES = {
   },
 
   dance(t, s, p) {
+    if (s.hard) {
+      // 凤头蹦迪：冠羽全竖、跟着拍子大幅度甩头、单脚点地
+      const bpm = s.bpm || 118, beat = t * bpm / 60;
+      const b = Math.sin(beat * Math.PI);
+      p.crest = 1;
+      p.headRot = 30 * b - 6;
+      p.headY = 6 * Math.abs(b);
+      p.headX = 4 + 6 * b;
+      p.rot = 8 * Math.sin(beat * Math.PI / 2);
+      p.y = -Math.abs(Math.sin(beat * Math.PI)) * 4;
+      p.wing = 8 + 10 * Math.abs(b);
+      const step = Math.floor(beat) % 2;
+      p.legL = step ? 6 * Math.abs(b) : 0;
+      p.legR = step ? 0 : 6 * Math.abs(b);
+      p.jaw = (Math.floor(beat) % 8 === 7) ? 18 * Math.abs(b) : 0;   // 偶尔跟着喊一嗓子
+      p.eye = blink(t, s.seed);
+      return;
+    }
     const b = Math.sin(t * TAU * 2);
     p.headRot = 18 * b;
     p.headX = 6 * b;
@@ -343,6 +361,84 @@ const POSES = {
 
   // 爬墙（画面上整只鸟转成竖直、脚朝墙；这里的"前方"就是往上，"脚那边"就是墙）：
   // 嘴往前伸、低头勾住墙 → 身子往上拉 → 两只脚交替往上蹬。嘴当第三只脚用。
+  // 凤头大喊大叫：冠羽"唰"地竖起来，翅膀半张，仰头张大嘴
+  scream(t, s, p) {
+    const k = Math.min(1, t / 0.25);
+    const yell = Math.sin(t * TAU * 1.4) > -0.2 ? 1 : 0.3;
+    p.crest = k;
+    p.headRot = -22 * k + 4 * Math.sin(t * TAU * 6) * yell;
+    p.headY = -4 * k;
+    p.jaw = 26 * k * yell;
+    p.wing = 30 * k + 8 * Math.sin(t * TAU * 3);
+    p.puff = 1 + 0.06 * k;
+    p.rot = -6 * k;
+    p.y = -2 * Math.abs(Math.sin(t * TAU * 3)) * k;
+    p.eye = 1;
+  },
+
+  // 凯克踢正步：挺胸、身子笔直，腿抬得高高地一顿一顿往前走，脑袋跟着一点一点
+  march(t, s, p) {
+    const STEP = 0.46;
+    const ph = (t % STEP) / STEP;
+    const lift = Math.sin(Math.min(1, ph / 0.6) * Math.PI);
+    const left = Math.floor(t / STEP) % 2 === 0;
+    p.rot = -7;
+    p.puff = 1.05;
+    p.y = -3 * lift;
+    p.headRot = -6 + 8 * lift;
+    p.headX = 2 * lift;
+    if (left) { p.legL = 11 * lift; p.legLX = 7 * lift; } else { p.legR = 11 * lift; p.legRX = 7 * lift; }
+    p.tail = 6;
+    p.wing = 2;
+    p.eye = blink(t, s.seed);
+  },
+
+  // 非洲灰模仿声音：歪着头、嘴一张一合，喉咙一鼓一鼓
+  mimic(t, s, p) {
+    p.headRot = 12 + 6 * Math.sin(t * TAU * 0.7);
+    p.jaw = 6 * Math.abs(Math.sin(t * TAU * 4));
+    p.puff = 1 + 0.03 * Math.abs(Math.sin(t * TAU * 4));
+    p.eye = blink(t, s.seed);
+  },
+
+  // 单脚抓着吃：抬起一只脚把坚果举到嘴边，低头一口一口啃
+  footeat(t, s, p) {
+    p.holdFoot = true;
+    const c = t % 1.3;
+    const bite = c < 0.35 ? Math.sin(c / 0.35 * Math.PI) : 0;
+    p.headRot = 24 + 14 * bite;
+    p.headX = 3 + 3 * bite;
+    p.headY = 3;
+    p.jaw = c > 0.15 && c < 0.3 ? 10 : 0;
+    p.rot = -3;
+    p.eye = blink(t, s.seed);
+  },
+
+  // 站在桌面图标上：东张西望，时不时低头看看脚下这个图标
+  perch(t, s, p) {
+    const c = t % 4.2;
+    const down = c > 2.6 && c < 3.6 ? Math.sin((c - 2.6) / 1.0 * Math.PI) : 0;
+    p.headRot = -6 + 10 * Math.sin(t * 0.9) + 34 * down;
+    p.headX = 4 * down;
+    p.crest = 0.6;
+    p.eye = blink(t, s.seed);
+    p.shadow = 0;
+  },
+
+  // 好奇：凑过去左歪头、右歪头地研究，最后试探着啄一下
+  inspect(t, s, p) {
+    p.crest = 0.8;
+    const tilt = Math.sin(t * TAU / 1.6);
+    p.headRot = 28 * tilt * (t < 2.6 ? 1 : 0.4);
+    p.headX = 5;
+    p.rot = 3;
+    if (t > 2.6 && t < 3.2) {                          // 啄一下
+      const k = Math.sin((t - 2.6) / 0.6 * Math.PI);
+      p.headRot = 40 * k; p.headX = 5 + 8 * k; p.rot = 3 + 8 * k;
+    }
+    p.eye = blink(t, s.seed);
+  },
+
   climb(t, s, p) {
     // 身子竖着贴墙（舞台整体往后仰一点），脚往前蹬住墙；
     // 一个循环：脖子往上伸、嘴张开 → 勾住墙往下一压、身子被拉上去 → 两只脚轮流往上挪
@@ -530,3 +626,5 @@ const POSES = {
     p.shadow = 0;
   },
 };
+
+POSES.iconclimb = POSES.climb;   // 往上一个图标爬：和爬屏幕边同一套动作

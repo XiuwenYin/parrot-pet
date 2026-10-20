@@ -197,6 +197,62 @@ const SPECIES = {
       eye: '#1B1B1B', eyeRing: null, feet: '#A8A09A',
     },
   },
+  // ---------- 稀有一点的 ----------
+  // 葵花凤头：通体白，冠羽柠檬黄，耳羽一抹淡黄，翅膀和尾巴底下透着黄；深灰大嘴，眼圈淡蓝白裸皮
+  cockatooSulphur: {
+    name: '葵花凤头',
+    shape: 'cockatoo',
+    palette: {
+      body: '#F6F6F1', bodyDark: '#D9DAD2', belly: '#FFFFFF',
+      wing: '#F3F3EC', wingEdge: '#CFCFC4', flight: '#F1E7B0',
+      rump: '#F4F4EE', tail: '#F2EDCF',
+      head: '#FAFAF6', face: '#FFFFFF', forehead: '#FFFFFF',
+      beak: '#45464C', beakDark: '#2A2B2F',
+      eye: '#1B1B1B', eyeRing: '#DCEAF4', feet: '#5E5F64',
+      crest: '#F6D447', cheekSpot: '#F6E7A6', cheek: '#F6E7A6',
+    },
+  },
+  // 白腹凯克：杏橙色头顶、黄脸颊和喉咙、绿背绿翅、雪白肚子、黄大腿
+  caiqueWhite: {
+    name: '白腹凯克',
+    shape: 'caique',
+    palette: {
+      body: '#7DBB4C', bodyDark: '#4E8E2E', belly: '#FBFBF5',
+      wing: '#6CAE3E', wingEdge: '#3F7E26', flight: '#2E5F8E',
+      rump: '#8BC34A', tail: '#73B24A',
+      head: '#F2A23C', face: '#F7D25A', forehead: '#F0952F',
+      beak: '#EFE4D8', beakDark: '#CDBFB0',
+      eye: '#3B1D16', eyeRing: '#F3EAE2', feet: '#C7A9A2',
+      collar: '#F6D85F', thigh: '#F2C443',
+    },
+  },
+  // 黑头凯克：黑色头顶，橙黄的脸颊和后颈，白肚子，绿背，橙黄大腿
+  caiqueBlack: {
+    name: '黑头凯克',
+    shape: 'caique',
+    palette: {
+      body: '#76B648', bodyDark: '#4A8A2C', belly: '#FBFBF5',
+      wing: '#68AA3C', wingEdge: '#3D7A25', flight: '#2D5C8A',
+      rump: '#86BF46', tail: '#6FAE46',
+      head: '#26262A', face: '#F3B04A', forehead: '#1F1F23',
+      beak: '#2A2A2E', beakDark: '#18181B',
+      eye: '#3B1D16', eyeRing: null, feet: '#9C8F8C',
+      collar: '#F3B04A', thigh: '#F0A93A',
+    },
+  },
+  // 非洲灰：深浅灰的鳞片纹，脸上一大圈白色裸皮，浅黄眼珠，黑嘴，大红尾巴
+  greyAfrican: {
+    name: '非洲灰',
+    shape: 'grey',
+    palette: {
+      body: '#8E939A', bodyDark: '#6A6F76', belly: '#A9AEB5',
+      wing: '#7C8188', wingEdge: '#5A5E65', flight: '#3A3D43',
+      rump: '#B6BAC0', tail: '#D3322B',
+      head: '#9AA0A7', face: '#B1B6BC', forehead: '#8C9198',
+      beak: '#26272B', beakDark: '#141416',
+      eye: '#EDE3B6', pupil: '#1B1B1B', eyeRing: '#EEF0F0', feet: '#5C5F64',
+    },
+  },
 };
 
 // 习性：weights 覆盖随机动作的权重（0 = 不会自己做），hold = 被拎太久的反应，
@@ -236,13 +292,49 @@ const FAMILIES = {
   },
   monk: {
     name: '和尚鹦鹉', voice: 'monk', hold: 'bite', petted: 'happy',
-    weights: { talk: 1.8, nest: 1.0, quake: 0.7, hang: 0.5, climb: 0.7 },
+    weights: { talk: 1.8, nest: 1.0, quake: 0.7, hang: 0.5, climb: 0.7, footeat: 0.5 },
     lines: {
       click: ['嘎！', '你好！', '干嘛呢？', '鸟中戏精上线', '哈喽！'],
       wake: ['起床啦！起床啦！', '嘎——早！'],
       talk: ['你好！你好！', '干嘛呢？', '起床啦！', '好吃好吃！', '拜拜～', '我爱你', '嘿！看我！'],
       bite: ['嘎！咬你！', '叫你不放！', '咔！'],
       warn: ['嘎嘎嘎！放开！', '我要咬了哦！'],
+    },
+  },
+  cockatoo: {
+    name: '凤头鹦鹉', voice: 'cockatoo', hold: 'nibble', petted: 'headdown',
+    // 爱蹦迪（放歌就甩头）、爱大喊大叫、用脚抓东西吃、讨挠头
+    weights: { dance: 1.6, scream: 0.9, footeat: 1.0, headdown: 0.8, talk: 0.5, sing: 0.3, hang: 0.4, climb: 0.5, eat: 0.3 },
+    lines: {
+      click: ['嗷！', '哈喽！', '挠挠头～', '凤头在此！'],
+      talk: ['哈喽！', '你好呀！', '挠挠～', '好鸟！'],
+      dance: ['动次打次！', '甩头！甩头！', '这首我会！', '蹦迪啦～'],
+      scream: ['啊啊啊啊——！', '嗷——！', '哇啊——！'],
+      footeat: ['我自己拿着吃', '咔嚓咔嚓', '嗯～香'],
+      warn: ['嗷！放开！', '啊啊啊！'],
+    },
+  },
+  caique: {
+    name: '凯克鹦鹉', voice: 'caique', hold: 'bite', petted: 'happy',
+    // 精力旺盛：挺胸抬腿踢正步、蹦蹦跳跳、用脚抓吃的
+    weights: { march: 1.8, walk: 1.2, dance: 0.8, footeat: 0.8, sing: 0.5, hang: 0.5, climb: 0.6, sleep: 0.5 },
+    lines: {
+      click: ['啾！', '一二一！', '凯克报到！', '嘿嘿'],
+      march: ['一二一！一二一！', '齐步——走！', '正步走！', '巡逻中'],
+      footeat: ['抓稳了', '咔嚓！'],
+      warn: ['咬你哦！', '啾啾啾！'],
+    },
+  },
+  grey: {
+    name: '非洲灰鹦鹉', voice: 'grey', hold: 'nibble', petted: 'happy',
+    // 说话最厉害：学舌、念出看到的字、模仿各种声音；用脚抓东西吃
+    weights: { talk: 2.2, mimic: 1.0, footeat: 0.9, look: 1.2, sing: 0.2, hang: 0.3, climb: 0.4 },
+    lines: {
+      click: ['你好！', '干嘛呢？', '哈喽～', '我在！'],
+      talk: ['你好！', '吃饭了吗？', '好鸟！', '拜拜～', '我爱你', '喂？喂？', '哈哈哈哈', '起床啦！'],
+      mimic: ['（学手机铃声）', '（学微波炉）', '（学门铃）', '（学口哨）'],
+      footeat: ['抓稳了', '慢慢吃'],
+      warn: ['放开！放开！', '不要！'],
     },
   },
 };
@@ -265,10 +357,14 @@ const ACTIONS = [
   { id: 'dance', name: '摇头晃脑', menu: true },
   { id: 'paper', name: '撕纸条插尾巴', menu: true, only: ['lovebird'] },
   { id: 'mirror', name: '照镜子', menu: true, only: ['budgie'] },
-  { id: 'talk', name: '说话', menu: true, only: ['budgie', 'cockatiel', 'monk'] },
+  { id: 'talk', name: '说话', menu: true, only: ['budgie', 'cockatiel', 'monk', 'cockatoo', 'grey'] },
+  { id: 'scream', name: '大喊大叫', menu: true, only: ['cockatoo'] },
+  { id: 'march', name: '踢正步', menu: true, only: ['caique'] },
+  { id: 'mimic', name: '模仿声音', menu: true, only: ['grey'] },
+  { id: 'footeat', name: '用脚抓着吃', menu: true, only: ['cockatoo', 'caique', 'grey', 'monk'] },
   { id: 'whistle', name: '吹口哨', menu: true, only: ['cockatiel'] },
   { id: 'heartwing', name: '心形翅膀', menu: true, only: ['cockatiel'] },
-  { id: 'headdown', name: '低头讨挠', menu: true, only: ['cockatiel'] },
+  { id: 'headdown', name: '低头讨挠', menu: true, only: ['cockatiel', 'cockatoo'] },
   { id: 'peekaboo', name: 'Peekaboo 躲猫猫', menu: true, only: ['cockatiel'] },
   { id: 'nest', name: '叼树枝搭窝', menu: true, only: ['monk'] },
   { id: 'quake', name: '和尚抖', menu: true, only: ['monk'] },
@@ -276,6 +372,9 @@ const ACTIONS = [
   { id: 'look', name: '盯着你看', menu: true },
   { id: 'tall', name: '伸长腿站高', menu: true },
   { id: 'climb', name: '爬屏幕边', menu: true },
+  { id: 'perch', name: '爬桌面图标', menu: true },
+  { id: 'inspect', name: '好奇研究' },
+  { id: 'iconclimb', name: '往上爬图标' },
   { id: 'walkto', name: '走过去', menu: false },
   { id: 'sleep', name: '睡觉', menu: true },
   { id: 'gnaw', name: '啃桌面图标', menu: true },

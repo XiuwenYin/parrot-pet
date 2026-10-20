@@ -33,6 +33,7 @@
   let traits = FAMILIES.lovebird;
   let hopT = 1;           // 点击时的小跳
   const CLIMB_LEAN = 20;  // 爬墙时身子往后仰的角度
+  let musicOn = false;    // 电脑在放歌/放视频（主进程检测）
   let menuOpen = false;   // 右键菜单开着：窗口原地不动（菜单才不会跟着跑），但鸟照常动
   let menuHold = null;
   let flipAngle = 0;      // 倒挂时舞台的旋转角度（慢慢转过去）
@@ -112,7 +113,7 @@
   // ---------- 气泡和特效 ----------
   let bubbleTimer;
   function say(text, ms = 2200) {
-    bubble.textContent = text;
+    bubble.textContent = fillNames(text);
     bubble.classList.add('show');
     clearTimeout(bubbleTimer);
     bubbleTimer = setTimeout(() => bubble.classList.remove('show'), ms);
@@ -160,9 +161,33 @@
     happy: ['好舒服～', '再摸摸'],
     angry: ['咬你哦！', '哼！'],
     hang: ['倒挂金钩！', '看我的！'],
+    perch: ['站高高～', '这个图标归我了', '视野真好', '我是山大王'],
+    iconclimb: ['再往上爬一个', '嘿咻——', '嘴勾住，脚一蹬'],
+    inspect: ['这是什么？', '嗯？', '研究研究', '能吃吗？'],
+    newIcon: ['新东西！', '咦，多了个文件', '让我看看是什么'],
   };
 
-  const lines = (id) => (traits.lines && traits.lines[id]) || LINES[id];
+  // 名字：{u} 换成主人的名字，{p} 换成它自己的名字。起了名字以后，这些带名字的话会混进平常的台词里
+  const userName = () => String(settings.userName || '').trim();
+  const petName = () => String((settings.petNames || {})[settings.species] || '').trim();
+  const fillNames = (t) => String(t).replace(/\{u\}/g, userName()).replace(/\{p\}/g, petName());
+  const NAMED = {
+    click: ['{u}～', '{u}摸摸我', '{u}来陪{p}玩嘛', '{u}！{u}！'],
+    look: ['{u}在干嘛呀？', '{u}看我看我'],
+    talk: ['{u}！{u}！', '{p}是好鸟！', '{u}早上好～', '{p}饿了', '{p}要{u}抱抱', '{u}～{u}～'],
+    wake: ['{u}早～', '{p}睡醒啦'],
+    eat: ['{p}开饭啦', '谢谢{u}的瓜子'],
+    sing: ['唱给{u}听～'],
+    whistle: ['吹给{u}听～'],
+    free: ['{u}拜拜～', '{p}飞走咯'],
+    warn: ['{u}！放开{p}！'],
+    happy: ['最喜欢{u}了'],
+  };
+  const lines = (id) => {
+    const base = (traits.lines && traits.lines[id]) || LINES[id];
+    const named = (NAMED[id] || []).filter(t => (!t.includes('{u}') || userName()) && (!t.includes('{p}') || petName()));
+    return named.length ? [...(base || []), ...named, ...named] : base;   // 带名字的话出现得多一点
+  };
 
   // dur: 持续秒数范围；w: 随机挑选权重（家族习性可覆盖）；enter/update: 进入时和每帧（管位置）
   const BEHAVIORS = {
@@ -207,6 +232,54 @@
             setState('fly', { noCrouch: true, quiet: true, waypoints: [{ x: pos.x - s.side * 160 * scale(), y: groundY() }] });
           }
         }
+      },
+    },
+    // 站在桌面图标上；上面还有图标就接着往上爬，没有了就飞下来
+    perch: {
+      dur: [4, 7], w: 0.35,
+      enter(s) {
+        if (!s.stack) return;
+        // 非洲灰会把脚下图标上写的字念出来
+        if (family === 'grey' && Math.random() < 0.8) {
+          const name = String(s.stack[0].name || '').replace(/\.[a-z0-9]{1,5}$/i, '').slice(0, 30);
+          say(`这里写着：${name}`, 3000);
+          setTimeout(() => { if (cur.s === s) Sound.speak(name); }, 400);
+        } else say(pickOne(lines(s.fresh ? 'newIcon' : 'perch')), 2200);
+      },
+      update(dt, s) {
+        if (!s.stack) return;
+        const k = Math.min(1, dt * 8);
+        pos.x += (s.px - pos.x) * k;
+        pos.y += (s.py - pos.y) * k;
+      },
+      next(s) {
+        if (s.stack && s.stack.length > 1 && Math.random() < 0.85) {
+          setState('iconclimb', { stack: s.stack.slice(1), quiet: Math.random() < 0.5 });
+        } else {
+          setState('fly', { noCrouch: true, quiet: true, waypoints: [{ x: pos.x + rand(-1, 1) * 140 * scale(), y: groundY() }] });
+        }
+      },
+    },
+    iconclimb: {
+      dur: [30, 30], w: 0,
+      enter(s) {
+        const ic = s.stack[0];
+        s.px = ic.x - 120 * scale();
+        s.py = (ic.y - ic.size / 2) - FOOT_Y * scale();
+      },
+      update(dt, s) {
+        pos.x += (s.px - pos.x) * Math.min(1, dt * 4);
+        const c = cur.t % CLIMB_CYCLE;
+        if (c > 0.35 && c < 0.75) pos.y -= (30 / 0.4) * scale() * dt;
+        if (pos.y <= s.py) { pos.y = s.py; setState('perch', { stack: s.stack, px: s.px, py: s.py, quiet: true, dur: rand(3, 6) }); }
+      },
+    },
+    // 好奇：鼠标在附近停住不动，走过去歪着头研究，再啄一下
+    inspect: {
+      dur: [3.6, 3.6], w: 0,
+      enter(s) { if (s.cx != null) dir = s.cx > pos.x + 120 * scale() ? 1 : -1; say(pickOne(lines('inspect')), 1800); },
+      update(dt, s) {
+        if (!s.pecked && cur.t > 2.75) { s.pecked = true; Sound.crack(); }
       },
     },
     walk: {
@@ -293,9 +366,54 @@
     },
     dance: {
       dur: [4, 6], w: 1,
+      enter(s) {
+        // 凤头蹦迪：冠羽全竖、大幅甩头；放着歌的时候跳得更久
+        if (family === 'cockatoo') { s.hard = true; s.bpm = rand(100, 128); if (musicOn) cur.dur = rand(10, 16); }
+      },
       update(dt, s) {
         s.note = (s.note || 0) - dt;
         if (s.note <= 0) { fx(pickOne(['♪', '♫']), { cls: 'note' }); s.note = 0.6; }
+        // 跟着拍子偶尔大喊一嗓子（和姿势里第 8 拍张嘴对上）
+        if (s.hard) {
+          const beat = Math.floor(cur.t * s.bpm / 60);
+          if (beat % 8 === 7 && beat !== s.yelled && Math.random() < 0.6) { s.yelled = beat; Sound.scream(0.5); if (Math.random() < 0.4) say(pickOne(lines('scream')), 1200); }
+        }
+      },
+    },
+    scream: {
+      dur: [1.6, 2.4], w: 0,
+      enter(s) { Sound.scream(1.3); say(pickOne(lines('scream')), 1600); },
+    },
+    // 凯克踢正步：挺胸抬腿，一步一顿往前走，走到头就向后转
+    march: {
+      dur: [4, 7], w: 0,
+      enter(s) { if (Math.random() < 0.5) dir = -dir; },
+      update(dt, s) {
+        const STEP = 0.46, ph = (cur.t % STEP) / STEP;
+        if (ph > 0.15 && ph < 0.6) pos.x += dir * 62 * scale() * dt;
+        const k = Math.floor(cur.t / STEP);
+        if (k !== s.k) { s.k = k; if (k > 0) Sound.chirp(1); }
+        if (pos.x < minX()) { pos.x = minX(); dir = 1; }
+        if (pos.x > maxX()) { pos.x = maxX(); dir = -1; }
+      },
+    },
+    // 非洲灰模仿家里的声音
+    mimic: {
+      dur: [2.6, 3.2], w: 0,
+      enter(s) {
+        const kinds = [['phone', '叮铃铃～叮铃铃～', '喂？'], ['microwave', '叮！', '饭好了！'], ['doorbell', '叮——咚', '来了来了！'], ['whistle', '嘘～哟', '嘿！']];
+        const [kind, sound, after] = pickOne(kinds);
+        say(sound, 1600);
+        const d = Sound.mimic(kind);
+        setTimeout(() => { if (cur.s === s) { say(after, 1400); if (family === 'grey') Sound.speak(after); } }, d * 1000);
+      },
+    },
+    // 单脚抓着吃
+    footeat: {
+      dur: [4, 7], w: 0,
+      update(dt, s) {
+        const c = cur.t % 1.3, k = Math.floor(cur.t / 1.3);
+        if (k !== s.k && c > 0.2) { s.k = k; Sound.crack(); }
       },
     },
     paper: {
@@ -394,19 +512,24 @@
     talk: {
       dur: [2.6, 3.6], w: 0,
       enter(s) {
-        const text = pickOne(lines('talk') || ['你好']);
-        say(text, 2600);
-        Sound.talk(Math.max(3, Math.min(8, text.length)));
+        // 教过的话，学舌的时候常说；非洲灰说得最清楚（直接用语音念出来）
+        const learned = (settings.learned || []).filter(Boolean);
+        const text = fillNames(learned.length && Math.random() < 0.45 ? pickOne(learned) : pickOne(lines('talk') || ['你好']));
+        say(text, 2800);
+        if (family === 'grey') Sound.speak(text);
+        else Sound.talk(Math.max(3, Math.min(8, text.length)));
       },
     },
     whistle: {
       dur: [6, 6], w: 0,
       enter(s) {
-        say(pickOne(lines('whistle')), 2500);
+        // 两首扒下来的曲子轮着吹，国歌多一点
+        const which = Math.random() < 0.55 ? 'b' : Math.random() < 0.75 ? 'a' : 'c';
+        say(which === 'b' ? pickOne(['♪ 叽咕叽～（玄凤国歌）', '♪ 叽～叽咕叽～', '国歌时间到～']) : pickOne(lines('whistle')), 2500);
         const me = cur;
         api.customSound(family + '-whistle').then((url) => {
           if (cur !== me) return;
-          const d = Sound.whistle(url);
+          const d = Sound.whistle(url, which);
           if (d) me.dur = d + 0.4;
           else { const a = new Audio(url); a.onloadedmetadata = () => { if (cur === me) me.dur = Math.min(30, a.duration + 0.4); }; }
         });
@@ -576,6 +699,7 @@
     if (prev && prev.exit && cur.id !== id) prev.exit(cur.s);
     const [a, z] = b.dur;
     const prevId = cur.id;
+    if (MOCK || env.debug) console.log('[state]', prevId, '→', id, id === 'thrown' ? new Error().stack.split('\n').slice(2, 4).join(' | ') : '');
     cur = { id, t: 0, dur: opts.dur || rand(a, z), s: { seed: Math.random(), ...opts } };
     if (shownPose) { blendFrom = shownPose; blendT = 0; blendDur = opts.blend ?? BLEND[id] ?? 0.35; }
     if (['fly', 'flutter', 'thrown'].includes(prevId) && !AIRBORNE.includes(id)) landT = 0;
@@ -590,7 +714,8 @@
     const entries = Object.entries(BEHAVIORS)
       .filter(([id, b]) => b.w > 0 && id !== cur.id)
       .filter(([id]) => actionAllowed(id, family))
-      .map(([id, b]) => [id, (traits.weights[id] ?? b.w) * (id === 'sleep' && (night || bored) ? 6 : 1)])
+      .map(([id, b]) => [id, (traits.weights[id] ?? b.w) * (id === 'sleep' && (night || bored) ? 6 : 1)
+        * (id === 'dance' && musicOn ? (family === 'cockatoo' ? 8 : 2) : 1) * (id === 'sleep' && musicOn ? 0.2 : 1)])
       .filter(([, w]) => w > 0);
     // 玄凤夜惊：夜里睡着睡着突然惊醒
     if (traits.nightFright && night && cur.id === 'sleep' && Math.random() < 0.25) return 'fright';
@@ -642,6 +767,45 @@
       then: { id: 'gnaw', opts: { points, icon: t, dir: d, quiet: true } } });
   }
 
+  // 爬桌面图标：先飞到最下面那个图标顶上站着
+  let perchPending = false;
+  async function startPerch(random, fresh) {
+    if (perchPending) return;
+    perchPending = true;
+    const center = { x: pos.x + 120 * scale(), y: pos.y + 140 * scale() };
+    let t;
+    try { t = fresh ? { stack: [fresh] } : await api.perchTarget(center); } catch (e) { t = { error: String(e) }; }
+    perchPending = false;
+    if (env.debug) console.log('[perch]', JSON.stringify(t).slice(0, 300));
+    if (!t || t.error || !t.stack) { if (!random) say(t && t.error ? t.error : '没找到能爬的图标', 4000); return; }
+    if (['drag', 'thrown', 'bite', 'gnaw'].includes(cur.id)) return;
+    const ic = t.stack[0];
+    const px = ic.x - 120 * scale(), py = (ic.y - ic.size / 2) - FOOT_Y * scale();
+    setState('fly', { noCrouch: !onGround(), quiet: true, waypoints: [{ x: px, y: py }],
+      then: { id: 'perch', opts: { stack: t.stack, px, py, fresh: !!fresh } } });
+  }
+
+  // 好奇心：鼠标在鸟够得着的地上附近停住几秒，就走过去研究
+  let lastCursor = null, cursorStill = 0, lastInspect = 0;
+  function checkCuriosity(dt) {
+    const c = env.cursor;
+    if (!c) return;
+    if (lastCursor && Math.abs(c.x - lastCursor.x) < 3 && Math.abs(c.y - lastCursor.y) < 3) cursorStill += dt;
+    else cursorStill = 0;
+    lastCursor = { x: c.x, y: c.y };
+    if (cursorStill < 3.5 || performance.now() - lastInspect < 45000) return;
+    if (!['idle', 'look', 'walk'].includes(cur.id) || !onGround()) return;
+    const cx = pos.x + 120 * scale();
+    const nearGround = c.y > groundY() + 60 * scale() && c.y < wa().y + wa().height;
+    if (!nearGround || Math.abs(c.x - cx) > 600 * scale() || Math.abs(c.x - cx) < 20 * scale()) return;
+    if (Math.random() > 0.5) { lastInspect = performance.now(); return; }
+    lastInspect = performance.now();
+    cursorStill = 0;
+    const side = c.x > cx ? 1 : -1;
+    const tx = Math.max(minX(), Math.min(maxX(), c.x - 120 * scale() - side * 60 * scale()));
+    setState('walkto', { tx, quiet: true, then: { id: 'inspect', opts: { cx: c.x, cy: c.y } } });
+  }
+
   // 去最近的屏幕边爬墙：近就走过去，远就飞过去
   function startClimb() {
     const cx = pos.x + 120 * scale();
@@ -657,6 +821,7 @@
     if (!actionAllowed(id, family)) { say(`${traits.name}不会这个哦`); return; }
     if (id === 'gnaw') return startGnaw(false);
     if (id === 'climb') return startClimb();
+    if (id === 'perch') return startPerch(false);
     if (id === 'hang') return setState('fly', { thenHang: true });
     if (id === 'fly') return setState('fly');
     if (!onGround()) {
@@ -795,6 +960,33 @@
       if (arg && ['walk', 'walkto'].includes(cur.id)) setState('look', { quiet: true });
     }
     else if (cmd === 'settings') { settings = arg; await applySettings(); }
+    else if (cmd === 'taught') {
+      // 刚教的话：歪头听一下，再跟着念一遍
+      if (onGround() && !['drag', 'thrown'].includes(cur.id)) setState('look', { quiet: true, dur: 1.4 });
+      setTimeout(() => {
+        const t = fillNames(arg);
+        say(t, 2800);
+        if (family === 'grey') Sound.speak(t); else Sound.talk(Math.max(3, Math.min(8, t.length)));
+      }, 1200);
+    }
+    else if (cmd === 'music') {
+      musicOn = !!arg;
+      // 凤头一听到歌就开始蹦迪；别的鸟偶尔跟着点点头
+      if (musicOn && ['idle', 'look', 'walk', 'sing', 'perch'].includes(cur.id) && onGround()) {
+        if (family === 'cockatoo') { setState('dance', { quiet: true }); say(pickOne(lines('dance')), 1800); }
+        else if (Math.random() < 0.3) setState('dance', { quiet: true });
+      }
+    }
+    else if (cmd === 'desk-new-icon') {
+      // 桌面上多了个文件：闲着就飞过去站上面看看
+      if (['idle', 'look', 'walk', 'perch'].includes(cur.id)) startPerch(true, arg);
+    }
+    else if (cmd === 'names-changed') {
+      Sound.chirp(3);
+      const u = arg.userName, p = arg.petName;
+      say(u && p ? `记住啦！你是${u}，我叫${p}～` : u ? `记住啦，你是${u}！` : p ? `我叫${p}！好听～` : '好吧，没名字也行', 3500);
+      if (onGround()) setState('happy', { quiet: true });
+    }
     else if (cmd === 'action') startAction(arg);
     else if (cmd === 'import-need-setup') {
       say(`看到 ${arg.count} 个新素材啦～\n要先下载抠图工具：\n右键 → 真实素材 → 下载自动抠图工具`, 7000);
@@ -852,9 +1044,10 @@
     cur.t += dt;
     const b = BEHAVIORS[cur.id];
     if (b.update) b.update(dt, cur.s);
+    checkCuriosity(dt);
 
     // 地面动作却悬在空中（比如换了显示器）→ 掉下去
-    const airborneOk = ['fly', 'hang', 'drag', 'thrown', 'flutter', 'bite', 'gnaw', 'peekaboo', 'climb'].includes(cur.id);
+    const airborneOk = ['fly', 'hang', 'drag', 'thrown', 'flutter', 'bite', 'gnaw', 'peekaboo', 'climb', 'perch', 'iconclimb'].includes(cur.id);
     if (!airborneOk && pos.y < groundY() - 2) setState('thrown', { vx: 0, vy: 0, quiet: true });
     // 越界时慢慢挪回来（硬夹会瞬移）；飞行、悬停、被扔的时候各自管边界
     const settle = Math.min(1, dt * 6);
@@ -871,6 +1064,7 @@
         if (n === 'gnaw') { setState('idle', { quiet: true, dur: 3 }); startGnaw(true); }
         else if (n === 'hang') setState('fly', { thenHang: true });
         else if (n === 'climb') startClimb();
+        else if (n === 'perch') { setState('idle', { quiet: true, dur: 3 }); startPerch(true); }
         else setState(n);
       }
     }
@@ -897,7 +1091,7 @@
       const prevVel = velX;
       velX += ((pos.x - lastX) / dt - velX) * Math.min(1, dt * 6);
       const accel = (velX - prevVel) / dt;
-      const free = !['drag', 'thrown', 'hang', 'bite', 'fly', 'flutter', 'gnaw', 'peekaboo', 'climb'].includes(cur.id);
+      const free = !['drag', 'thrown', 'hang', 'bite', 'fly', 'flutter', 'gnaw', 'peekaboo', 'climb', 'perch', 'iconclimb'].includes(cur.id);
       // 匀速时微微前倾；减速（急停）时身子还想往前冲 → 前倾更多，然后弹簧回弹站稳
       const target = free ? Math.max(-12, Math.min(12, (velX * 0.04 - accel * 0.012) * dir / scale())) : 0;
       leanV += (120 * (target - lean) - 8 * leanV) * dt;
@@ -918,7 +1112,7 @@
     const sdx = Math.abs(shownDir) < 0.04 ? 0.04 * Math.sign(dir) : shownDir;
 
     // 倒挂/翻回来都转过去，不一下子跳
-    const flipTarget = cur.id === 'hang' ? 180 : cur.id === 'climb' ? -CLIMB_LEAN * dir : 0;
+    const flipTarget = cur.id === 'hang' ? 180 : (cur.id === 'climb' || cur.id === 'iconclimb') ? -CLIMB_LEAN * dir : 0;
     flipAngle += Math.sign(flipTarget - flipAngle) * Math.min(Math.abs(flipTarget - flipAngle), 540 * dt);
     stage.style.transform = (flipAngle ? `rotate(${flipAngle.toFixed(1)}deg) ` : '') + `scaleX(${sdx.toFixed(3)})`;
     bubble.classList.toggle('below', flipAngle > 90);
@@ -949,7 +1143,9 @@
   await applySettings();
   pos.y = Math.min(pos.y, groundY());
   setState('idle', { quiet: true });
-  say(pickOne(lines('click')) + ' 我是' + (SPECIES[settings.species] || SPECIES.roseicollis).name, 2500);
+  if (userName() && petName()) say(`${userName()}，${petName()}来啦～`, 2500);
+  else if (petName()) say(`${petName()}来啦～`, 2500);
+  else say(pickOne(lines('click')) + ' 我是' + (SPECIES[settings.species] || SPECIES.roseicollis).name, 2500);
   requestAnimationFrame(frame);
 
   if (MOCK) window.__petDebug = { setState, cur: () => cur, pose: () => shownPose, dir: () => shownDir, inertia: () => ({ lean, velX, x: pos.x, dir }), pause: (v) => { paused = v; }, flip: () => flipAngle, pos: () => ({ ...pos }), act: (id) => startAction(id), at: (id, t) => { setState(id, { quiet: true, dur: 99 }); cur.t = t; paused = true; } };

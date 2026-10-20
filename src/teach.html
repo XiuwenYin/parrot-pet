@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+  <title>教它说话</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #f6f4ef; --card: #fff; --text: #2b2b2b; --muted: #777; --line: #ddd8cc; --accent: #4f8f4a; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #1f1f1d; --card: #2a2a27; --text: #ecebe6; --muted: #a3a29b; --line: #44433e; --accent: #7cc56f; } }
+    body { margin: 0; padding: 18px 22px; background: var(--bg); color: var(--text); font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    h1 { font-size: 17px; margin: 0 0 4px; }
+    p.note { color: var(--muted); margin: 0 0 12px; font-size: 12.5px; }
+    .row { display: flex; gap: 8px; }
+    input { flex: 1; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; }
+    button { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
+    ul { list-style: none; padding: 0; margin: 12px 0 0; max-height: 120px; overflow: auto; }
+    li { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+    li a { color: var(--muted); cursor: pointer; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>教它说话</h1>
+  <p class="note" id="note">打一句话，它会先跟着念一遍，以后学舌的时候也会说。可以用 {u} 代表你的名字。</p>
+  <div class="row"><input id="t" maxlength="30" placeholder="比如：{u}早上好"><button id="go">教它</button></div>
+  <ul id="list"></ul>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    async function load() {
+      const v = await window.names.teachGet();
+      $('note').textContent = `打一句话，这只${v.speciesName}会先跟着念一遍，以后学舌的时候也会说。可以用 {u} 代表你的名字。`;
+      $('list').innerHTML = '';
+      for (const t of v.learned) {
+        const li = document.createElement('li');
+        li.textContent = t;
+        const a = document.createElement('a'); a.textContent = '忘掉'; a.onclick = async () => { await window.names.forget(t); load(); };
+        li.appendChild(a); $('list').appendChild(li);
+      }
+    }
+    const go = async () => { const t = $('t').value.trim(); if (!t) return; await window.names.teach(t); $('t').value = ''; load(); };
+    $('go').onclick = go;
+    document.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); if (e.key === 'Escape') window.close(); });
+    load(); $('t').focus();
+  </script>
+</body>
+</html>

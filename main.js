@@ -28,8 +28,10 @@ let importer;
 let desk;
 let videogen;
 let aiSettingsWin;
+let namesWin;
 let settingsPath;
-let settings = { species: 'roseicollis', mode: 'cartoon', size: 'medium', muted: false };
+// userName：主人叫什么；petNames：每只鸟（按鸟种）各自的名字
+let settings = { species: 'roseicollis', mode: 'cartoon', size: 'medium', muted: false, userName: '', petNames: {} };
 
 function loadSettings() {
   settingsPath = path.join(app.getPath('userData'), 'settings.json');
@@ -157,6 +159,9 @@ function buildMenuTemplate() {
         click: () => setSetting('size', s.id),
       })),
     },
+    { label: '名字（你叫什么、它叫什么）…', click: () => openNames() },
+    ...(['budgie', 'monk', 'cockatoo', 'grey', 'cockatiel'].includes(familyOf(settings.species))
+      ? [{ label: '教它说一句话…', click: () => openTeach() }] : []),
     { label: '静音', type: 'checkbox', checked: settings.muted, click: (item) => setSetting('muted', item.checked) },
     { type: 'separator' },
     {
@@ -237,6 +242,50 @@ function listRealAssets(species) {
 const toInt = (v) => (Number.isFinite(v) ? Math.max(-1e6, Math.min(1e6, Math.round(v))) || 0 : null);
 
 // ---------- AI 生成动作 ----------
+// 电脑在放歌/放视频吗（Mac）：播放声音的程序会挂一个"Playing audio"之类的电源断言，pmset 能看到是谁挂的。
+// 排除桌宠自己（它叫起来也会挂）。只看有没有，不读任何内容。
+let musicOn = false;
+function watchMusic() {
+  if (process.platform !== 'darwin') return;
+  setInterval(() => {
+    const own = new Set(app.getAppMetrics().map(m => m.pid));
+    require('child_process').execFile('pmset', ['-g', 'assertions'], { timeout: 3000 }, (err, out) => {
+      if (err) return;
+      let on = false;
+      for (const line of out.split('\n')) {
+        const m = line.match(/pid (\d+)\(([^)]*)\):.*named: "([^"]*)"/);
+        if (!m || own.has(+m[1]) || m[2] === 'coreaudiod') continue;
+        if (/playing audio|audio|music|media|video|播放/i.test(m[3])) { on = true; break; }
+      }
+      if (on !== musicOn) { musicOn = on; send('music', on); }
+    });
+  }, 6000);
+}
+
+// 教它说话：输入一句话，鸟以后学舌时会说（最多记 20 句）
+let teachWin;
+function openTeach() {
+  if (teachWin && !teachWin.isDestroyed()) { teachWin.show(); teachWin.focus(); return; }
+  teachWin = new BrowserWindow({
+    width: 380, height: 300, title: '教它说话', resizable: false,
+    webPreferences: { preload: path.join(__dirname, 'src', 'names_preload.js'), contextIsolation: true },
+  });
+  teachWin.setMenuBarVisibility(false);
+  teachWin.loadFile(path.join(__dirname, 'src', 'teach.html'));
+  app.focus({ steal: true });
+}
+
+function openNames() {
+  if (namesWin && !namesWin.isDestroyed()) { namesWin.show(); namesWin.focus(); return; }
+  namesWin = new BrowserWindow({
+    width: 380, height: 330, title: '名字', resizable: false,
+    webPreferences: { preload: path.join(__dirname, 'src', 'names_preload.js'), contextIsolation: true },
+  });
+  namesWin.setMenuBarVisibility(false);
+  namesWin.loadFile(path.join(__dirname, 'src', 'names.html'));
+  app.focus({ steal: true });
+}
+
 function openAiSettings() {
   if (aiSettingsWin && !aiSettingsWin.isDestroyed()) { aiSettingsWin.show(); aiSettingsWin.focus(); return; }
   aiSettingsWin = new BrowserWindow({
@@ -299,10 +348,40 @@ ipcMain.handle('get-env', () => {
   const [x, y] = win.getPosition();
   const [w, h] = win.getSize();
   const display = screen.getDisplayNearestPoint({ x: x + w / 2, y: y + h / 2 });
-  return { x, y, w, h, workArea: display.workArea, cursor: screen.getCursorScreenPoint() };
+  return { x, y, w, h, workArea: display.workArea, cursor: screen.getCursorScreenPoint(), debug: !!process.env.PET_DEBUG };
 });
 
 ipcMain.handle('get-settings', () => settings);
+ipcMain.handle('names-get', () => ({
+  userName: settings.userName || '',
+  petName: (settings.petNames || {})[settings.species] || '',
+  speciesName: SPECIES[settings.species].name,
+}));
+ipcMain.handle('teach-get', () => ({ learned: settings.learned || [], speciesName: SPECIES[settings.species].name }));
+ipcMain.handle('teach-save', (_e, text) => {
+  const t = String(text || '').replace(/[\r\n]/g, ' ').trim().slice(0, 30);
+  if (!t) return false;
+  settings.learned = [t, ...(settings.learned || []).filter(x => x !== t)].slice(0, 20);
+  saveSettings();
+  send('settings', settings);
+  send('taught', t);
+  return true;
+});
+ipcMain.handle('teach-forget', (_e, text) => {
+  settings.learned = (settings.learned || []).filter(x => x !== text);
+  saveSettings();
+  send('settings', settings);
+  return true;
+});
+ipcMain.handle('names-save', (_e, v) => {
+  const clip = (x) => String(x || '').replace(/[\r\n]/g, '').slice(0, 12);
+  settings.userName = clip(v.userName);
+  settings.petNames = { ...(settings.petNames || {}), [settings.species]: clip(v.petName) };
+  saveSettings();
+  send('settings', settings);
+  send('names-changed', { userName: settings.userName, petName: settings.petNames[settings.species] });
+  return true;
+});
 ipcMain.handle('ai-config-get', () => videogen.publicConfig());
 ipcMain.handle('ai-config-save', (_e, cfg) => { videogen.saveConfig(cfg); rebuildTray(); return true; });
 // 自定义声音：素材文件夹 sounds/<名字>.mp3 等，存在就返回 file:// 地址
@@ -314,6 +393,7 @@ ipcMain.handle('custom-sound', (_e, name) => {
   return null;
 });
 ipcMain.handle('gnaw-target', (_e, near) => desk.pickTarget(near));
+ipcMain.handle('perch-target', (_e, near) => desk.pickPerch(near));
 ipcMain.on('desk', (_e, cmd, arg) => { desk.onPet(cmd, arg); rebuildTray(); });
 ipcMain.handle('list-real-assets', (_e, species) => listRealAssets(species));
 
@@ -331,6 +411,8 @@ app.whenReady().then(() => {
   if (process.platform === 'darwin' && app.dock) app.dock.hide();
   createWindow();
   desk = createDesk({ root: TOOLS_ROOT, getPetWindow: () => win });
+  desk.watchNewIcons((icon) => send('desk-new-icon', icon));
+  watchMusic();
   videogen = createVideoGen({
     userDataDir: app.getPath('userData'),
     realDir: REAL_DIR,

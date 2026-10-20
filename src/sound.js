@@ -24,7 +24,7 @@ const Sound = (() => {
       lfo.stop(start + dur + 0.02);
     }
     g.gain.setValueAtTime(0, start);
-    g.gain.linearRampToValueAtTime(vol, start + 0.01);
+    g.gain.linearRampToValueAtTime(vol, start + Math.min(0.025, dur * 0.25));   // 起音别太陡，不然有咔哒声
     g.gain.setValueAtTime(vol, start + dur * 0.7);
     g.gain.exponentialRampToValueAtTime(0.001, start + dur);
     o.connect(g).connect(a.destination);
@@ -75,6 +75,28 @@ const Sound = (() => {
     [7, 0.5], [4, 0.5], [2, 1], [4, 0.5], [7, 0.5], [12, 1.5],
     [11, 0.5], [9, 0.5], [7, 0.5], [9, 0.5], [7, 2]];
 
+  // 下面两首是照着玄凤录音里鸟自己吹的版本扒下来的（不是原曲）：音高用 MIDI 音号（带小数，鸟本来就吹得有点偏），
+  // [开始秒, 时长秒, 音高, 颤音幅度Hz]
+  // 第一首：先一个低音起头，往上一跳拉长颤音；第二句更高、再一路往下走
+  const TUNE_A = [
+    [0.00, 0.36, 89.4, 0], [0.42, 0.70, 97.8, 60],
+    [1.75, 0.26, 89.4, 0], [2.03, 0.22, 97.8, 0], [2.30, 0.22, 97.8, 0], [2.58, 0.22, 97.6, 0], [2.84, 0.24, 96.7, 25],
+    [3.13, 0.24, 97.6, 0], [3.44, 0.88, 99.1, 70],
+    [4.75, 0.20, 99.0, 0], [5.02, 0.24, 97.8, 0], [5.30, 0.22, 96.0, 0], [5.60, 0.22, 96.0, 0], [5.88, 0.14, 96.0, 0],
+    [6.00, 0.16, 98.0, 0], [6.18, 0.24, 95.7, 0], [6.48, 0.14, 95.6, 0], [6.64, 0.12, 94.5, 0], [6.80, 0.13, 96.1, 0],
+    [6.94, 0.15, 98.3, 0], [7.12, 0.50, 95.1, 50],
+  ];
+  // 第二首"玄凤国歌"：一串短促上挑的"叽"，中间夹着拐个弯的"咕"（[开始秒, 'j' 叽 / 'g' 咕]）
+  const TUNE_B = [
+    [0.00, 'j'], [0.33, 'j'], [0.53, 'j'], [0.67, 'j'],
+    [1.14, 'j'], [1.22, 'g'], [1.53, 'j'], [1.72, 'j'], [1.89, 'j'], [2.03, 'g'], [2.33, 'j'], [2.69, 'g'], [2.78, 'j'],
+    [3.17, 'j'], [3.39, 'j'], [3.56, 'j'], [3.83, 'j'], [3.92, 'j'], [3.97, 'j'], [4.36, 'j'],
+    [4.72, 'j'], [4.89, 'j'], [5.11, 'j'], [5.47, 'j'], [5.56, 'j'], [5.72, 'j'], [5.97, 'j'],
+    [6.33, 'j'], [6.53, 'j'], [6.69, 'g'], [6.81, 'j'], [7.11, 'j'], [7.39, 'g'], [7.47, 'j'],
+    [7.83, 'j'], [8.00, 'j'], [8.25, 'j'], [8.56, 'j'], [8.67, 'j'], [8.86, 'j'],
+  ];
+  const midiHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
   const voices = {
     lovebird: {
       chirp(now, i) { const b = rnd(2600, 3500); tone(now + i * 0.11, 0.07, b, b * rnd(1.25, 1.55), 0.1, 'triangle'); },
@@ -89,6 +111,21 @@ const Sound = (() => {
       // 玄凤的"哔～哦"：先升后降的口哨
       chirp(now, i) { const b = rnd(1700, 2100); tone(now + i * 0.3, 0.12, b, b * 1.35, 0.09, 'sine', 30); tone(now + i * 0.3 + 0.12, 0.16, b * 1.35, b * 0.85, 0.08, 'sine', 30); },
       song(now) { return voices.cockatiel.tune(now); },
+      tuneA(now) {
+        for (const [t, d, m, vib] of TUNE_A) {
+          const f = midiHz(m);
+          tone(now + t, d, f * 0.96, f, 0.08, 'sine', vib);
+        }
+        return 7.7;
+      },
+      tuneB(now) {
+        for (const [t, k] of TUNE_B) {
+          const b = rnd(1330, 1450);
+          if (k === 'j') tone(now + t, 0.07, b, b * 1.32, 0.09, 'sine');          // 叽：短促往上挑
+          else { tone(now + t, 0.06, b * 1.1, b * 0.88, 0.08, 'sine'); tone(now + t + 0.06, 0.07, b * 0.88, b * 1.25, 0.08, 'sine'); }  // 咕：先下后上拐个弯
+        }
+        return 9.1;
+      },
       tune(now) {
         const base = 1250;
         let t = now;
@@ -100,6 +137,21 @@ const Sound = (() => {
         }
         return t - now;
       },
+    },
+    // 凤头：沙哑的大嗓门"嗷"
+    cockatoo: {
+      chirp(now, i) { syllable(now + i * 0.22, 0.18, rnd(420, 560), rnd(1500, 2400), 0.12); noise(now + i * 0.22, 0.16, 2600, 0.05, 'bandpass', 1.2); },
+      song(now) { for (let i = 0; i < 4; i++) { syllable(now + i * 0.25, 0.2, rnd(400, 600), rnd(1300, 2600), 0.1); noise(now + i * 0.25, 0.18, 2400, 0.04, 'bandpass', 1.2); } },
+    },
+    // 凯克：尖细响亮的哨音，忽高忽低
+    caique: {
+      chirp(now, i) { const b = rnd(2800, 3600); tone(now + i * 0.12, 0.09, b, b * rnd(0.7, 1.3), 0.09, 'triangle'); },
+      song(now) { for (let i = 0; i < 8; i++) { const b = rnd(2400, 3800); tone(now + i * 0.11, 0.08, b, b * (i % 2 ? 1.35 : 0.75), 0.07); } },
+    },
+    // 非洲灰：低沉一点的口哨和咕哝
+    grey: {
+      chirp(now, i) { const b = rnd(1400, 1900); tone(now + i * 0.2, 0.14, b, b * 1.25, 0.08, 'sine', 20); },
+      song(now) { for (let i = 0; i < 5; i++) { const b = rnd(1200, 2200); tone(now + i * 0.18, 0.15, b, b * (i % 2 ? 1.3 : 0.8), 0.07, 'sine', 15); } },
     },
     monk: {
       chirp(now, i) { syllable(now + i * 0.16, 0.13, rnd(700, 950), rnd(1400, 2200), 0.12); },
@@ -123,13 +175,13 @@ const Sound = (() => {
     talk(syllables = 5) {
       if (muted) return;
       const now = ac().currentTime;
-      const pitch = { lovebird: 900, budgie: 1100, cockatiel: 800, monk: 620 }[voice];
+      const pitch = { lovebird: 900, budgie: 1100, cockatiel: 800, monk: 620, cockatoo: 560, caique: 1000, grey: 700 }[voice] || 800;
       for (let i = 0; i < syllables; i++) {
         syllable(now + i * 0.16, 0.13, pitch * rnd(0.85, 1.25), rnd(900, 2600), 0.09);
       }
     },
-    // 玄凤吹口哨，返回曲子时长（秒）。有自定义录音就播录音
-    whistle(customUrl) {
+    // 玄凤吹口哨，返回曲子时长（秒）。有自定义录音就播录音；which：'a' 第一首、'b' 玄凤国歌、'c' 原来那段小调
+    whistle(customUrl, which = 'b') {
       if (muted) return 4;
       if (customUrl) {
         const a = new Audio(customUrl);
@@ -137,7 +189,43 @@ const Sound = (() => {
         a.play().catch(() => {});
         return 0;      // 时长等元数据加载后再定
       }
-      return voices.cockatiel.tune(ac().currentTime);
+      const now = ac().currentTime, v = voices.cockatiel;
+      return which === 'a' ? v.tuneA(now) : which === 'c' ? v.tune(now) : v.tuneB(now);
+    },
+    // 凤头尖叫：一长声沙哑的"啊——"，带噪音
+    scream(dur = 1.2) {
+      if (muted) return;
+      const now = ac().currentTime;
+      syllable(now, dur, 520, 2200, 0.16);
+      syllable(now + 0.02, dur * 0.95, 780, 3200, 0.08);
+      noise(now, dur, 2800, 0.09, 'bandpass', 0.9);
+    },
+    // 非洲灰模仿：手机铃声 / 微波炉"叮" / 门铃 / 口哨
+    mimic(kind) {
+      if (muted) return 2;
+      const now = ac().currentTime;
+      if (kind === 'phone') {
+        for (let r = 0; r < 2; r++) for (let i = 0; i < 10; i++) tone(now + r * 1.0 + i * 0.05, 0.045, i % 2 ? 1320 : 1760, i % 2 ? 1320 : 1760, 0.06, 'square');
+        return 2.2;
+      }
+      if (kind === 'microwave') { tone(now, 0.05, 2000, 2000, 0.05); tone(now + 0.6, 0.9, 1568, 1560, 0.09, 'sine'); return 1.8; }
+      if (kind === 'doorbell') { tone(now, 0.5, 1318, 1318, 0.09, 'triangle'); tone(now + 0.45, 0.8, 1046, 1046, 0.09, 'triangle'); return 1.6; }
+      // 两声口哨"嘘～哟"
+      tone(now, 0.35, 1400, 2600, 0.08); tone(now + 0.45, 0.45, 2600, 1300, 0.08);
+      return 1.2;
+    },
+    // 用系统语音念字（非洲灰学舌、念图标名字）：嗓音调高一点、语速快一点，像鸟学的
+    speak(text, { pitch = 1.6, rate = 1.15 } = {}) {
+      if (muted || !window.speechSynthesis || !text) return;
+      try {
+        const u = new SpeechSynthesisUtterance(String(text).slice(0, 80));
+        u.lang = /[\u4e00-\u9fff]/.test(text) ? 'zh-CN' : 'en-US';
+        const v = speechSynthesis.getVoices().find(x => x.lang && x.lang.startsWith(u.lang.slice(0, 2)));
+        if (v) u.voice = v;
+        u.pitch = pitch; u.rate = rate; u.volume = 0.9;
+        speechSynthesis.cancel();
+        speechSynthesis.speak(u);
+      } catch (_) {}
     },
     // 玄凤哈气
     hiss() {
