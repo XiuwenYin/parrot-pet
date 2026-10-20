@@ -131,8 +131,9 @@ function parrotSVG(shapeId, p) {
   const cc = p.crest || '#F5D24A';
   const crestSide = S.crest === 'cockatoo' ? `<g id="crest">
       <g id="crestRest">
-        <path d="M134,46 C128,30 114,15 94,6 C100,14 106,22 110,30 C104,28 98,28 94,30 C104,32 112,38 116,47 Z" fill="${cc}" ${line(cc)}/>
-        <path d="M128,40 C122,30 112,20 100,12" stroke="${shade(cc, 0.25)}" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.8"/>
+        <!-- 平时：整束冠羽从额头顺着头顶贴到后脑，尖端在脑后往上翘 -->
+        <path d="M140,48 C131,36 114,29 97,33 C87,35 81,40 77,35 C74,30 71,24 64,16 C73,22 79,30 83,38 C85,44 84,49 82,54 C90,44 104,39 118,39 C127,40 134,43 140,48 Z" fill="${cc}" ${line(cc)}/>
+        <path d="M134,41 C122,34 106,34 92,38 M88,40 C82,36 78,30 72,22" stroke="${shade(cc, 0.28)}" stroke-width="1.3" fill="none" stroke-linecap="round" opacity="0.85"/>
       </g>
       <g id="crestFan">${cockatooFeathers(false)}</g></g>` : S.crest ? `<g id="crest">
       <path d="M120,48 C114,30 104,16 92,8 C104,12 116,22 126,40 Z" fill="${p.crest || p.face}" ${line(p.crest || p.face)}/>
@@ -140,7 +141,7 @@ function parrotSVG(shapeId, p) {
       <path d="M124,46 C122,30 116,18 108,10 C118,16 126,28 130,42 Z" fill="${shade(p.crest || p.face, 0.08)}" ${line(p.crest || p.face)}/>
     </g>` : '';
   const crestFront = S.crest === 'cockatoo' ? `<g id="crestFront">
-      <g id="crestRestFront"><path d="M106,44 C104,30 108,16 116,4 C118,16 122,30 122,44 Z" fill="${cc}" ${line(cc)}/></g>
+      <g id="crestRestFront"><path d="M104,42 C104,34 109,29 114,28 C119,29 124,34 124,42 C120,38 116,36 114,36 C111,36 107,38 104,42 Z" fill="${cc}" ${line(cc)}/></g>
       <g id="crestFanFront">${cockatooFeathers(true)}</g></g>` : S.crest ? `<g id="crestFront">
       <path d="M110,44 C106,28 104,16 98,6 C108,14 114,28 116,42 Z" fill="${p.crest || p.face}" ${line(p.crest || p.face)}/>
       <path d="M118,42 C120,26 124,16 130,6 C130,18 126,30 122,44 Z" fill="${shade(p.crest || p.face, 0.06)}" ${line(p.crest || p.face)}/>
@@ -365,13 +366,13 @@ function parrotSVG(shapeId, p) {
   <g id="feet">
     <!-- 远处那只脚：在后面、颜色暗一点、略高 -->
     <g id="footL">
-      <path id="legLineL" d="M96,${(S.legTop || 171)} L96.5,181.5" stroke="${shade(p.feet, -0.18)}" stroke-width="3.2" stroke-linecap="round"/>
+      <path id="legLineL" d="M96,${(S.legTop || 171)} L96.5,181.5" stroke="${shade(p.feet, -0.18)}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
       <path d="M96.5,181.5 Q101.5,181.5 104.5,184.5 M96.5,181.5 Q100.5,183.5 102.5,186.5 M96.5,181.5 Q92.5,182.5 90.5,185"
             stroke="${shade(p.feet, -0.18)}" stroke-width="2.4" stroke-linecap="round" fill="none"/>
     </g>
     <!-- 近处那只脚：两趾朝前、一趾朝后 -->
     <g id="footR">
-      <path id="legLineR" d="M104,${(S.legTop || 171) + 1} L104.5,183" stroke="${p.feet}" stroke-width="3.4" stroke-linecap="round"/>
+      <path id="legLineR" d="M104,${(S.legTop || 171) + 1} L104.5,183" stroke="${p.feet}" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
       <path d="M104.5,183 Q109.5,183 112.5,186.5 M104.5,183 Q108.5,185.5 110.5,188.5 M104.5,183 Q100,184 98,187"
             stroke="${p.feet}" stroke-width="2.6" stroke-linecap="round" fill="none"/>
     </g>
@@ -496,6 +497,8 @@ function parrotSVG(shapeId, p) {
 
   ${scratchLeg}
   ${holdLeg}
+  <!-- 高抬腿时近处那条腿挪到这里，画在身子前面 -->
+  <g id="feetFront"></g>
   </g>
 </g>`;
 }
@@ -559,7 +562,7 @@ function makeCartoon(svg, shapeId) {
     crest: $('crest'), crestFront: $('crestFront'),
     upper: $('upper'), upperBack: $('upperBack'), legLineL: $('legLineL'), legLineR: $('legLineR'),
     mirror: $('mirror'), beakTwig: $('beakTwig'), twigGround: $('twigGround'),
-    footHold: $('footHold'),
+    footHold: $('footHold'), feetFront: $('feetFront'),
     crestRest: $('crestRest'), crestFan: $('crestFan'), crestRestFront: $('crestRestFront'), crestFanFront: $('crestFanFront'),
     neckFill: $('neckFill'), neckSil: $('neckSil'), headSil: $('headSil'), headFeat: $('headFeat'),
     neckGrad: svg.querySelector('radialGradient[id^="neckGrad"]'),
@@ -623,6 +626,7 @@ function makeCartoon(svg, shapeId) {
     stops.forEach((st, i) => st.setAttribute('offset', offs[i]));
   }
 
+  let legRFront = false;
   return function apply(p) {
     const [fx, fy] = P.feet;
     els.pose.setAttribute('transform',
@@ -658,19 +662,31 @@ function makeCartoon(svg, shapeId) {
       const fan = Math.max(0, Math.min(1, (c - 0.9) / 0.1));
       show(els.crestRest, fan < 0.15); show(els.crestRestFront, fan < 0.15);
       show(els.crestFan, fan >= 0.15); show(els.crestFanFront, fan >= 0.15);
-      els.crestFan.setAttribute('transform', `rotate(${-70 + 85 * fan} ${P.crest[0]} ${P.crest[1] + 4})`);
-      els.crestRest.setAttribute('transform', `rotate(${-20 + 14 * Math.min(1, c / 0.6)} 120 46)`);
+      els.crestFan.setAttribute('transform', `rotate(${-60 + 95 * fan} ${P.crest[0]} ${P.crest[1] + 4})`);   // 炸开时往前倾，罩到头顶前面
+      els.crestRest.setAttribute('transform', `rotate(${-4 + 6 * Math.min(1, c / 0.6)} 110 50)`);
       if (els.crestFanFront) els.crestFanFront.setAttribute('transform', `translate(114 44) scale(${0.4 + 0.6 * fan}) translate(-114 -44)`);
     } else if (els.crest) els.crest.setAttribute('transform', `rotate(${-62 + 66 * c} ${P.crest[0]} ${P.crest[1]})`);
     if (els.crestFront && SH.crest !== 'cockatoo') els.crestFront.setAttribute('transform', `translate(114 44) scale(1 ${0.35 + 0.65 * c}) translate(-114 -44)`);
     // 腮红常驻淡淡一层，开心时更红
     els.blush.setAttribute('opacity', 0.3 + 0.55 * p.blush);
     // 伸长腿：上半身抬高，腿线跟着拉长，脚趾不动
-    const lift = LEG_LIFT * Math.max(0, Math.min(1, p.legExt));
+    const lift = LEG_LIFT * Math.max(0, Math.min(1.5, p.legExt));
     els.upper.setAttribute('transform', lift ? `translate(0 ${-lift})` : '');
     els.upperBack.setAttribute('transform', lift ? `translate(0 ${-lift})` : '');
-    els.legLineL.setAttribute('d', `M96,${LEG_TOP - lift} L96.5,181.5`);
-    els.legLineR.setAttribute('d', `M104,${LEG_TOP + 1 - lift} L104.5,183`);
+    // 腿：髋部固定在身子底下，脚抬起来时中间弯出一个往前顶的膝盖（高抬腿），而不是整条腿平移上去
+    // （腿线在脚的组里，组被平移了 legX、-legY，所以髋部坐标要反着减回去）
+    const legPath = (hx, hy, fx, fy, dx, up) => {
+      const x0 = hx - dx, y0 = hy + up;
+      if (up < 1.5 || p.kick) return `M${x0.toFixed(1)},${y0.toFixed(1)} L${fx},${fy}`;   // 正步：直腿踢出去
+      // 高抬腿：膝盖是最高点，在脚的上方偏前；小腿从膝盖垂下来，脚吊在下面
+      const kx = fx + 4 + Math.min(10, up * 0.25), ky = fy - Math.min(22, up * 0.7);
+      return `M${x0.toFixed(1)},${y0.toFixed(1)} L${kx.toFixed(1)},${ky.toFixed(1)} L${fx},${fy}`;
+    };
+    els.legLineL.setAttribute('d', legPath(96, LEG_TOP - lift, 96.5, 181.5, p.legLX, p.legL));
+    els.legLineR.setAttribute('d', legPath(104, LEG_TOP + 1 - lift, 104.5, 183, p.legRX, p.legR));
+    // 近处那条腿高抬（膝盖要顶到肚子前面）时，挪到身子前面画；放下再挪回去
+    const rFront = p.legR > 8;
+    if (rFront !== legRFront) { legRFront = rFront; (rFront ? els.feetFront : els.feet).appendChild(els.footR); }
     els.footL.setAttribute('transform', `translate(${p.legLX} ${-p.legL})`);
     els.footR.setAttribute('transform', `translate(${p.legRX} ${-p.legR})`);
     show(els.footR, !p.scratchFoot && !p.holdFoot);

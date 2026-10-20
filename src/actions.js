@@ -21,6 +21,45 @@ function headToBack(p, depth = 1) {
   p.headY = 18 * depth;
 }
 
+// 凤头蹦迪（参考"雪球"的舞步研究：甩头、抬脚甩头、头脚同步、头绕圈、Vogue 甩脸、扭身子、抖毛）：
+// 冠羽全程炸开，每 4 拍换一种舞步，同一首歌每次跳的都不一样；动作是"啪"地到位再弹回，带点疯劲
+const COCKATOO_MOVES = ['bang', 'bangFoot', 'sync', 'circle', 'vogue', 'roll', 'bang', 'shake'];
+const snap = (x) => { x = x - Math.floor(x); return x < 0.35 ? Math.pow(x / 0.35, 0.5) : Math.pow(1 - (x - 0.35) / 0.65, 2); };
+function danceCockatoo(t, s, p) {
+  const bpm = s.bpm || 118, beat = t * bpm / 60;
+  const bar = Math.floor(beat / 4);
+  const move = COCKATOO_MOVES[(bar * 5 + Math.floor((s.seed || 0) * 97)) % COCKATOO_MOVES.length];
+  const k = snap(beat);                       // 每拍：猛地到位、慢慢回来
+  const alt = Math.floor(beat) % 2 ? 1 : -1;  // 左右交替
+  p.crest = 1;
+  p.eye = 1;
+  p.wing = 6;
+  if (move === 'bang') {                      // 甩头：整个脑袋狠狠往下砸
+    p.headRot = -18 + 52 * k; p.headY = 8 * k; p.headX = 4 + 6 * k; p.rot = 4 + 6 * k;
+  } else if (move === 'bangFoot') {           // 抬起一只脚甩头
+    p.headRot = -14 + 46 * k; p.headY = 6 * k; p.headX = 6 * k;
+    p.legR = 16; p.legRX = 8 + 3 * k; p.rot = 6;
+  } else if (move === 'sync') {               // 头和抬起的脚一起前后甩
+    p.legL = alt > 0 ? 12 * k : 0; p.legLX = alt > 0 ? 8 * k : 0;
+    p.legR = alt < 0 ? 12 * k : 0; p.legRX = alt < 0 ? 8 * k : 0;
+    p.headX = 10 * alt * k; p.headRot = 20 * alt * k; p.rot = 5 * alt * k;
+  } else if (move === 'circle') {             // 脑袋画圈
+    const a = beat * Math.PI / 2;
+    p.headX = 9 * Math.cos(a); p.headY = 7 * Math.sin(a); p.headRot = 22 * Math.sin(a); p.rot = 4 * Math.cos(a);
+  } else if (move === 'vogue') {              // 甩脸：一拍往前一拍往后，定住摆个 pose
+    p.headRot = 30 * alt * Math.min(1, k * 1.6); p.headX = 6 * alt; p.headY = -3; p.rot = -4;
+    p.wing = 20 * Math.min(1, k * 1.6);
+  } else if (move === 'roll') {               // 整个身子扭起来
+    const a = beat * Math.PI / 2;
+    p.rot = 12 * Math.sin(a); p.y = -5 * Math.abs(Math.cos(a)); p.headRot = -16 * Math.sin(a); p.wing = 14 + 10 * Math.abs(Math.sin(a));
+  } else {                                    // 抖毛：浑身炸起来抖
+    p.puff = 1.12; p.rot = 3 * Math.sin(t * TAU * 9); p.headRot = 8 * Math.sin(t * TAU * 11); p.wing = 18;
+  }
+  if (Math.floor(beat) % 8 === 7) p.jaw = 24 * k;   // 第 8 拍跟着喊一嗓子
+  if (move !== 'bangFoot' && move !== 'sync') { const st = Math.floor(beat) % 2; p.legL = p.legL || (st ? 4 * k : 0); p.legR = p.legR || (st ? 0 : 4 * k); }
+  p.y = (p.y || 0) - 3 * k;
+}
+
 const POSES = {
   idle(t, s, p) {
     if (s.front) { p.front = true; p.headX = -12; }
@@ -144,21 +183,7 @@ const POSES = {
 
   dance(t, s, p) {
     if (s.hard) {
-      // 凤头蹦迪：冠羽全竖、跟着拍子大幅度甩头、单脚点地
-      const bpm = s.bpm || 118, beat = t * bpm / 60;
-      const b = Math.sin(beat * Math.PI);
-      p.crest = 1;
-      p.headRot = 30 * b - 6;
-      p.headY = 6 * Math.abs(b);
-      p.headX = 4 + 6 * b;
-      p.rot = 8 * Math.sin(beat * Math.PI / 2);
-      p.y = -Math.abs(Math.sin(beat * Math.PI)) * 4;
-      p.wing = 8 + 10 * Math.abs(b);
-      const step = Math.floor(beat) % 2;
-      p.legL = step ? 6 * Math.abs(b) : 0;
-      p.legR = step ? 0 : 6 * Math.abs(b);
-      p.jaw = (Math.floor(beat) % 8 === 7) ? 18 * Math.abs(b) : 0;   // 偶尔跟着喊一嗓子
-      p.eye = blink(t, s.seed);
+      danceCockatoo(t, s, p);
       return;
     }
     const b = Math.sin(t * TAU * 2);
@@ -376,20 +401,39 @@ const POSES = {
     p.eye = 1;
   },
 
-  // 凯克踢正步：挺胸、身子笔直，腿抬得高高地一顿一顿往前走，脑袋跟着一点一点
+  // 凯克踢正步：把藏着的腿整个伸出来（大长腿），挺胸昂头，膝盖抬得高高的再"啪"地跺下去，
+  // 身子跟着一步一晃；每走几步来两下弹簧跳（凯克出了名的蹦跶）
   march(t, s, p) {
-    const STEP = 0.46;
-    const ph = (t % STEP) / STEP;
-    const lift = Math.sin(Math.min(1, ph / 0.6) * Math.PI);
-    const left = Math.floor(t / STEP) % 2 === 0;
-    p.rot = -7;
-    p.puff = 1.05;
-    p.y = -3 * lift;
-    p.headRot = -6 + 8 * lift;
-    p.headX = 2 * lift;
-    if (left) { p.legL = 11 * lift; p.legLX = 7 * lift; } else { p.legR = 11 * lift; p.legRX = 7 * lift; }
-    p.tail = 6;
-    p.wing = 2;
+    const STEP = 0.52;
+    const n = Math.floor(t / STEP), ph = (t % STEP) / STEP;
+    const hopping = n % 8 >= 6;                       // 第 7、8 步换成双脚弹跳
+    p.legExt = 1.35;
+    p.rot = -9;
+    p.puff = 1.06;
+    p.crest = 0;
+    p.tail = 8;
+    p.wing = 3;
+    if (hopping) {
+      const h = Math.sin(ph * Math.PI);
+      p.y = -16 * h;
+      p.legL = p.legR = 5 * h;
+      p.legLX = p.legRX = 2 * h;
+      p.sy = 1 + 0.06 * h - (ph > 0.9 ? 0.06 : 0);
+      p.headRot = -10 + 8 * h;
+    } else {
+      // 抬腿 0~0.55（越抬越高、膝盖往前顶），0.55~0.7 跺下去，之后站稳换另一只
+      const up = ph < 0.55 ? Math.sin(ph / 0.55 * Math.PI / 2) : ph < 0.7 ? 1 - (ph - 0.55) / 0.15 : 0;
+      const stomp = ph >= 0.68 && ph < 0.8 ? 1 - Math.abs(ph - 0.74) / 0.06 : 0;
+      const left = n % 2 === 0;
+      // 正步：腿伸直往前甩出去，脚在肚子前下方（身子抬高了，肚子底下有空，整条腿都露在外面），再"啪"地跺下去
+      p.kick = true;
+      if (left) { p.legL = 7 * up; p.legLX = 24 * up; } else { p.legR = 10 * up; p.legRX = 30 * up; }
+      p.y = -2 * up + 2 * stomp;
+      p.sy = 1 - 0.04 * stomp;
+      p.rot = -9 + (left ? 3 : -3) * up;            // 一步一晃
+      p.headRot = -12 + 6 * up - 8 * stomp;          // 昂着头，跺脚时脑袋一点
+      p.headX = -2 + 3 * stomp;
+    }
     p.eye = blink(t, s.seed);
   },
 
