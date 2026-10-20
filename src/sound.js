@@ -4,6 +4,22 @@ const Sound = (() => {
   let ctx;
   let muted = false;
   let voice = 'lovebird';
+  let ttsFn = null;
+  // 真实叫声：{ 家族: [地址] }；凯克没有录音，借和尚的、调高音调
+  let bank = {};
+  const BORROW = { caique: ['monk', 1.32] };
+  function sample(fam, rate = 1, vol = 0.5, pick) {
+    const [src, shift] = bank[fam] && bank[fam].length ? [fam, 1] : BORROW[fam] && bank[BORROW[fam][0]] ? BORROW[fam] : [null];
+    if (!src) return 0;
+    const list = pick ? bank[src].filter(u => u.includes(pick)) : bank[src];
+    const url = (list.length ? list : bank[src])[Math.floor(Math.random() * (list.length || bank[src].length))];
+    const a = new Audio(url);
+    a.preservesPitch = false;
+    a.playbackRate = rate * shift * rnd(0.93, 1.08);
+    a.volume = vol;
+    a.play().catch(() => {});
+    return 0.45 / a.playbackRate;
+  }        // 学舌用：主进程把文字合成成 WAV（base64）
   const ac = () => (ctx = ctx || new AudioContext());
   const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -162,13 +178,26 @@ const Sound = (() => {
   return {
     setMuted(m) { muted = m; },
     setVoice(v) { voice = voices[v] ? v : 'lovebird'; },
+    setBank(b) { bank = b || {}; },
+    // 叫一声：有真实录音的鸟大多用录音（凯克借和尚的），偶尔混一下合成音
     chirp(n = 2) {
       if (muted) return;
+      if ((bank[voice] || BORROW[voice]) && Math.random() < 0.8) {
+        let t = 0;
+        for (let i = 0; i < Math.min(n, 2); i++) { setTimeout(() => sample(voice), t * 1000); t += 0.32; }
+        return;
+      }
       const now = ac().currentTime;
       for (let i = 0; i < n; i++) voices[voice].chirp(now, i);
     },
     song() {
       if (muted) return;
+      // 唱歌：几段录音接起来（虎皮用长一点的 song 段）
+      if ((bank[voice] || BORROW[voice]) && Math.random() < 0.7) {
+        const k = 2 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < k; i++) setTimeout(() => sample(voice, 1, 0.45, voice === 'budgie' && i % 2 ? 'song' : null), i * 380);
+        return;
+      }
       voices[voice].song(ac().currentTime);
     },
     // 学说话：一串含糊的"音节"，音高按嗓音调
@@ -195,6 +224,11 @@ const Sound = (() => {
     // 凤头尖叫：一长声沙哑的"啊——"，带噪音
     scream(dur = 1.2) {
       if (muted) return;
+      if (bank.cockatoo && bank.cockatoo.length) {       // 用真凤头的尖叫
+        sample('cockatoo', 1, 0.6);
+        if (dur > 0.9) setTimeout(() => sample('cockatoo', 0.95, 0.6), 520);
+        return;
+      }
       const now = ac().currentTime;
       syllable(now, dur, 520, 2200, 0.16);
       syllable(now + 0.02, dur * 0.95, 780, 3200, 0.08);
@@ -214,19 +248,39 @@ const Sound = (() => {
       tone(now, 0.35, 1400, 2600, 0.08); tone(now + 0.45, 0.45, 2600, 1300, 0.08);
       return 1.2;
     },
-    // 用系统语音念字（非洲灰学舌、念图标名字）：嗓音调高一点、语速快一点，像鸟学的
-    speak(text, { pitch = 1.6, rate = 1.15 } = {}) {
-      if (muted || !window.speechSynthesis || !text) return;
+    // 鹦鹉学舌：系统语音先合成成音频（setTts 传进来的函数，主进程用 say/系统语音），再加"鹦鹉嗓"：
+    // 音调和语速提一点、削掉低频的人声厚度、突出 2～4kHz 的尖鼻音、加一点 30Hz 左右的沙哑颤动和轻微失真
+    async speak(text) {
+      if (muted || !text || !ttsFn) return;
+      let b64;
+      try { b64 = await ttsFn(String(text)); } catch (_) { return; }
+      if (!b64) return;
       try {
-        const u = new SpeechSynthesisUtterance(String(text).slice(0, 80));
-        u.lang = /[\u4e00-\u9fff]/.test(text) ? 'zh-CN' : 'en-US';
-        const v = speechSynthesis.getVoices().find(x => x.lang && x.lang.startsWith(u.lang.slice(0, 2)));
-        if (v) u.voice = v;
-        u.pitch = pitch; u.rate = rate; u.volume = 0.9;
-        speechSynthesis.cancel();
-        speechSynthesis.speak(u);
+        const a = ac();
+        const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        const buf = await a.decodeAudioData(bin.buffer);
+        const src = a.createBufferSource();
+        src.buffer = buf;
+        src.playbackRate.value = 1.22;
+        const hp = a.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 650; hp.Q.value = 0.8;
+        const nasal = a.createBiquadFilter(); nasal.type = 'peaking'; nasal.frequency.value = 2900; nasal.Q.value = 1.4; nasal.gain.value = 9;
+        const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 6500;
+        const shaper = a.createWaveShaper();
+        const curve = new Float32Array(1024);
+        for (let i = 0; i < 1024; i++) { const x = i / 511.5 - 1; curve[i] = Math.tanh(2.2 * x); }
+        shaper.curve = curve;
+        const trem = a.createGain(); trem.gain.value = 0.75;
+        const lfo = a.createOscillator(); lfo.frequency.value = 31;
+        const lfoGain = a.createGain(); lfoGain.gain.value = 0.25;
+        lfo.connect(lfoGain).connect(trem.gain);
+        const out = a.createGain(); out.gain.value = 1.4;
+        src.connect(hp).connect(nasal).connect(shaper).connect(lp).connect(trem).connect(out).connect(a.destination);
+        const now = a.currentTime;
+        lfo.start(now); src.start(now);
+        lfo.stop(now + buf.duration / 1.22 + 0.1);
       } catch (_) {}
     },
+    setTts(fn) { ttsFn = fn; },
     // 玄凤哈气
     hiss() {
       if (muted) return;

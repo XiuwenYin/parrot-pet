@@ -33,6 +33,8 @@
   let traits = FAMILIES.lovebird;
   let hopT = 1;           // 点击时的小跳
   const CLIMB_LEAN = 20;  // 爬墙时身子往后仰的角度
+  Sound.setTts(api.tts);
+  if (api.soundBank) api.soundBank().then(b => Sound.setBank(b)).catch(() => {});
   let musicOn = false;    // 电脑在放歌/放视频（主进程检测）
   let menuOpen = false;   // 右键菜单开着：窗口原地不动（菜单才不会跟着跑），但鸟照常动
   let menuHold = null;

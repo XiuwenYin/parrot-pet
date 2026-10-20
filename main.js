@@ -352,11 +352,50 @@ ipcMain.handle('get-env', () => {
 });
 
 ipcMain.handle('get-settings', () => settings);
+// 真实鹦鹉叫声（assets/sounds/<家族>/*.wav，出处见 CREDITS.md）：{ 家族: [file:// 地址, ...] }
+ipcMain.handle('sound-bank', () => {
+  const root = path.join(__dirname, 'assets', 'sounds');
+  const bank = {};
+  try {
+    for (const fam of fs.readdirSync(root)) {
+      const dir = path.join(root, fam);
+      if (!fs.statSync(dir).isDirectory()) continue;
+      bank[fam] = fs.readdirSync(dir).filter(f => /\.(wav|mp3|ogg)$/i.test(f)).map(f => 'file://' + path.join(dir, f));
+    }
+  } catch (_) {}
+  return bank;
+});
 ipcMain.handle('names-get', () => ({
   userName: settings.userName || '',
   petName: (settings.petNames || {})[settings.species] || '',
   speciesName: SPECIES[settings.species].name,
 }));
+// 鹦鹉学舌：先用系统语音把这句话合成成一段 WAV（只在本机，不联网），交给桌宠加"鹦鹉嗓"再放。
+// 中文用偏机器腔的 Eddy，比默认那个字正腔圆的女声更像鸟学的；没有就用系统默认。
+ipcMain.handle('tts', async (_e, text) => {
+  const t = String(text || '').replace(/[\r\n"]/g, ' ').slice(0, 80);
+  if (!t.trim()) return null;
+  const out = path.join(app.getPath('temp'), `parrot_tts_${Date.now()}.wav`);
+  const zh = /[\u4e00-\u9fff]/.test(t);
+  const run = (cmd, args) => new Promise((resolve) => require('child_process').execFile(cmd, args, { timeout: 8000 }, (err) => resolve(!err)));
+  let ok = false;
+  if (process.platform === 'darwin') {
+    const base = ['-o', out, '--file-format=WAVE', '--data-format=LEI16@22050'];
+    if (zh) ok = await run('say', ['-v', 'Eddy (中文（中国大陆）)', ...base, t]);
+    if (!ok) ok = await run('say', [...base, t]);
+  } else if (process.platform === 'win32') {
+    const ps = `Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.SetOutputToWaveFile('${out.replace(/'/g, "''")}'); $s.Speak([Console]::In.ReadToEnd()); $s.Dispose()`;
+    ok = await new Promise((resolve) => {
+      const p = require('child_process').execFile('powershell', ['-NoProfile', '-Command', ps], { timeout: 10000 }, (err) => resolve(!err));
+      p.stdin.end(t);
+    });
+  }
+  if (!ok || !fs.existsSync(out)) return null;
+  const b64 = fs.readFileSync(out).toString('base64');
+  fs.unlink(out, () => {});
+  return b64;
+});
+
 ipcMain.handle('teach-get', () => ({ learned: settings.learned || [], speciesName: SPECIES[settings.species].name }));
 ipcMain.handle('teach-save', (_e, text) => {
   const t = String(text || '').replace(/[\r\n]/g, ' ').trim().slice(0, 30);

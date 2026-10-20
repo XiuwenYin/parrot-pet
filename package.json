@@ -32,6 +32,7 @@
       "src/**/*",
       "assets/tray*.png",
       "assets/trayTemplate*.png",
+      "assets/sounds/**/*",
       "tools/*.py",
       "tools/*.sh",
       "tools/*.ps1",
